@@ -55,6 +55,43 @@ class RedactionVault {
   }
 }
 
+class StreamRestorer {
+  private buffer = "";
+  private vault: RedactionVault;
+  
+  constructor(vault: RedactionVault) {
+    this.vault = vault;
+  }
+  
+  push(chunk: string): string {
+    this.buffer += chunk;
+    this.buffer = this.vault.restore(this.buffer);
+    
+    let safeToFlush = "";
+    const lastOpen = this.buffer.lastIndexOf('[');
+    if (lastOpen === -1) {
+       safeToFlush = this.buffer;
+       this.buffer = "";
+    } else {
+       const suffix = this.buffer.slice(lastOpen);
+       if ("[REDACTED_PII_".startsWith(suffix) || /^\[REDACTED_PII_\d*$/.test(suffix)) {
+          safeToFlush = this.buffer.slice(0, lastOpen);
+          this.buffer = suffix;
+       } else {
+          safeToFlush = this.buffer;
+          this.buffer = "";
+       }
+    }
+    return safeToFlush;
+  }
+  
+  flush(): string {
+    const res = this.vault.restore(this.buffer);
+    this.buffer = "";
+    return res;
+  }
+}
+
 // We'll define two simple bash tools for local system access
 const localTools = [
   {
@@ -106,7 +143,7 @@ export default defineCommand({
     const messages: ChatMessage[] = [
       {
         role: "system",
-        content: isZH ? "您是一个运行在本地终端中的 AI Agent。您拥有读取文件和运行 Bash 命令的工具。请帮助用户完成他们的任务。您可以自由地使用 Markdown 格式化您的输出。" : "You are a helpful AI Agent running in a local terminal. You have tools to read files and run bash commands. Help the user with their tasks. Feel free to use markdown to format your output.",
+        content: isZH ? "您是一个运行在本地终端中的 AI Agent。您拥有读取文件和运行 Bash 命令的工具。请帮助用户完成他们的任务。注意：用户的敏感数据会被替换为 [REDACTED_PII_x] 的形式。您可以正常阅读和使用这些占位符，只需将占位符原样返回，系统会自动为您替换回真实数据以供执行和显示。" : "You are a helpful AI Agent running in a local terminal. You have tools to read files and run bash commands. Help the user with their tasks. NOTE: Sensitive data is replaced with placeholders like [REDACTED_PII_1]. You can read and use these placeholders normally. Just output the placeholder exactly as is, and the system will seamlessly restore the real data for execution and display.",
       },
     ];
 
@@ -148,6 +185,7 @@ export default defineCommand({
 
         let textContent = "";
         let functionCalls: Record<number, any> = {};
+        const restorer = new StreamRestorer(vault);
 
         for await (const event of parseSSE(responseStream)) {
           if (event.data === "[DONE]") break;
@@ -158,9 +196,7 @@ export default defineCommand({
 
               if (delta.content) {
                 textContent += delta.content;
-                // For simplicity, we just stream raw text.
-                // Full markdown rendering of a stream is complex!
-                process.stdout.write(pc.white(delta.content));
+                process.stdout.write(pc.white(restorer.push(delta.content)));
               }
 
               if (delta.tool_calls) {
@@ -179,6 +215,11 @@ export default defineCommand({
               }
             }
           } catch {}
+        }
+        
+        const remaining = restorer.flush();
+        if (remaining) {
+           process.stdout.write(pc.white(remaining));
         }
 
         console.log("\n");
