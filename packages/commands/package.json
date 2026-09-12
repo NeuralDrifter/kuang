@@ -40,15 +40,20 @@
     "check": "vp check"
   },
   "dependencies": {
+    "@clack/prompts": "catalog:",
     "@openagentpack/sdk": "0.7.1",
     "bailian-cli-core": "workspace:*",
     "bailian-cli-runtime": "workspace:*",
     "boxen": "catalog:",
     "chalk": "catalog:",
+    "marked": "catalog:",
+    "marked-terminal": "catalog:",
+    "picocolors": "catalog:",
     "smol-toml": "catalog:",
     "yaml": "catalog:"
   },
   "devDependencies": {
+    "@types/marked-terminal": "catalog:",
     "@types/node": "catalog:",
     "@typescript/native-preview": "7.0.0-dev.20260328.1",
     "e2e": "workspace:*",

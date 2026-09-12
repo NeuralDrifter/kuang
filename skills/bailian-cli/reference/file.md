@@ -7,29 +7,29 @@ Index: [index.md](index.md)
 
 ## Commands in this group
 
-| Command          | Authentication | Description                                              |
-| ---------------- | -------------- | -------------------------------------------------------- |
-| `bl file upload` | API Key        | Upload a local file to DashScope temporary storage (48h) |
+| Command | Authentication | Description |
+| --- | --- | --- |
+| `bl file upload` | API Key | Upload a local file to DashScope temporary storage (48h) |
 
 ## Command details
 
 ### `bl file upload`
 
-| Field              | Value                                                    |
-| ------------------ | -------------------------------------------------------- |
-| **Name**           | `file upload`                                            |
-| **Description**    | Upload a local file to DashScope temporary storage (48h) |
-| **Authentication** | API Key                                                  |
-| **Usage**          | `bl file upload --file <path> --model <model>`           |
+| Field | Value |
+| --- | --- |
+| **Name** | `file upload` |
+| **Description** | Upload a local file to DashScope temporary storage (48h) |
+| **Authentication** | API Key |
+| **Usage** | `bl file upload --file <path> --model <model>` |
 
 #### Flags
 
-| Flag               | Type   | Required | Description                                     |
-| ------------------ | ------ | -------- | ----------------------------------------------- |
-| `--file <path>`    | string | yes      | Local file to upload (image, video, audio)      |
-| `--model <model>`  | string | yes      | Target model name (file is bound to this model) |
-| `--api-key <key>`  | string | no       | API key                                         |
-| `--base-url <url>` | string | no       | API base URL                                    |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--file <path>` | string | yes | Local file to upload (image, video, audio) |
+| `--model <model>` | string | yes | Target model name (file is bound to this model) |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Examples
 

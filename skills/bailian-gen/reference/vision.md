@@ -7,31 +7,31 @@ Index: [index.md](index.md)
 
 ## Commands in this group
 
-| Command              | Authentication | Description                              |
-| -------------------- | -------------- | ---------------------------------------- |
-| `bl vision describe` | API Key        | Describe an image or video using Qwen-VL |
+| Command | Authentication | Description |
+| --- | --- | --- |
+| `bl vision describe` | API Key | Describe an image or video using Qwen-VL |
 
 ## Command details
 
 ### `bl vision describe`
 
-| Field              | Value                                                                        |
-| ------------------ | ---------------------------------------------------------------------------- |
-| **Name**           | `vision describe`                                                            |
-| **Description**    | Describe an image or video using Qwen-VL                                     |
-| **Authentication** | API Key                                                                      |
-| **Usage**          | `bl vision describe --image <path-or-url> [--video <url>] [--prompt <text>]` |
+| Field | Value |
+| --- | --- |
+| **Name** | `vision describe` |
+| **Description** | Describe an image or video using Qwen-VL |
+| **Authentication** | API Key |
+| **Usage** | `bl vision describe --image <path-or-url> [--video <url>] [--prompt <text>]` |
 
 #### Flags
 
-| Flag                    | Type   | Required | Description                                         |
-| ----------------------- | ------ | -------- | --------------------------------------------------- |
-| `--image <path-or-url>` | string | no       | Local image path or URL                             |
-| `--video <url>`         | array  | no       | Video file URL or local path (mp4/mov/avi/mkv/webm) |
-| `--prompt <text>`       | string | no       | Question about the content (default: auto-detected) |
-| `--model <model>`       | string | no       | Vision model (default: qwen3-vl-plus)               |
-| `--api-key <key>`       | string | no       | API key                                             |
-| `--base-url <url>`      | string | no       | API base URL                                        |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--image <path-or-url>` | string | no | Local image path or URL |
+| `--video <url>` | array | no | Video file URL or local path (mp4/mov/avi/mkv/webm) |
+| `--prompt <text>` | string | no | Question about the content (default: auto-detected) |
+| `--model <model>` | string | no | Vision model (default: qwen3-vl-plus) |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Examples
 

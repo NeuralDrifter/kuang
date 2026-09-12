@@ -7,32 +7,32 @@ Index: [index.md](index.md)
 
 ## Commands in this group
 
-| Command                | Authentication | Description                                                              |
-| ---------------------- | -------------- | ------------------------------------------------------------------------ |
-| `bl permission grant`  | API Key        | Grant model permissions (inference / finetune / deploy)                  |
-| `bl permission list`   | API Key        | List model permissions (inference / fine-tune / deploy) in the workspace |
-| `bl permission revoke` | API Key        | Revoke model permissions (inference / finetune / deploy)                 |
+| Command | Authentication | Description |
+| --- | --- | --- |
+| `bl permission grant` | API Key | Grant model permissions (inference / finetune / deploy) |
+| `bl permission list` | API Key | List model permissions (inference / fine-tune / deploy) in the workspace |
+| `bl permission revoke` | API Key | Revoke model permissions (inference / finetune / deploy) |
 
 ## Command details
 
 ### `bl permission grant`
 
-| Field              | Value                                                                |
-| ------------------ | -------------------------------------------------------------------- |
-| **Name**           | `permission grant`                                                   |
-| **Description**    | Grant model permissions (inference / finetune / deploy)              |
-| **Authentication** | API Key                                                              |
-| **Usage**          | `bl permission grant --model <models> [--action <actions>] \| --all` |
+| Field | Value |
+| --- | --- |
+| **Name** | `permission grant` |
+| **Description** | Grant model permissions (inference / finetune / deploy) |
+| **Authentication** | API Key |
+| **Usage** | `bl permission grant --model <models> [--action <actions>] \| --all` |
 
 #### Flags
 
-| Flag                 | Type   | Required | Description                                                                             |
-| -------------------- | ------ | -------- | --------------------------------------------------------------------------------------- |
-| `--model <models>`   | string | no       | Model ID(s), comma-separated (max 20)                                                   |
-| `--action <actions>` | string | no       | Permission action(s), comma-separated: inference, finetune, deploy (default: inference) |
-| `--all`              | switch | no       | One-key grant inference for all models in the workspace (including future ones)         |
-| `--api-key <key>`    | string | no       | API key                                                                                 |
-| `--base-url <url>`   | string | no       | API base URL                                                                            |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--model <models>` | string | no | Model ID(s), comma-separated (max 20) |
+| `--action <actions>` | string | no | Permission action(s), comma-separated: inference, finetune, deploy (default: inference) |
+| `--all` | switch | no | One-key grant inference for all models in the workspace (including future ones) |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 
@@ -60,24 +60,24 @@ bl permission grant --model qwen-plus --dry-run --output json
 
 ### `bl permission list`
 
-| Field              | Value                                                                                                   |
-| ------------------ | ------------------------------------------------------------------------------------------------------- |
-| **Name**           | `permission list`                                                                                       |
-| **Description**    | List model permissions (inference / fine-tune / deploy) in the workspace                                |
-| **Authentication** | API Key                                                                                                 |
-| **Usage**          | `bl permission list [--scope <scope>] [--model <model>] [--name <name>] [--page <n>] [--page-size <n>]` |
+| Field | Value |
+| --- | --- |
+| **Name** | `permission list` |
+| **Description** | List model permissions (inference / fine-tune / deploy) in the workspace |
+| **Authentication** | API Key |
+| **Usage** | `bl permission list [--scope <scope>] [--model <model>] [--name <name>] [--page <n>] [--page-size <n>]` |
 
 #### Flags
 
-| Flag                                 | Type   | Required | Description                                                           |
-| ------------------------------------ | ------ | -------- | --------------------------------------------------------------------- |
-| `--scope <authorized\|authorizable>` | string | no       | Authorization scope: authorizable (default, full catalog), authorized |
-| `--model <model>`                    | string | no       | Model ID (exact match)                                                |
-| `--name <name>`                      | string | no       | Fuzzy search by model name or ID                                      |
-| `--page <n>`                         | number | no       | Page number (default: 1)                                              |
-| `--page-size <n>`                    | number | no       | Results per page (default: 20)                                        |
-| `--api-key <key>`                    | string | no       | API key                                                               |
-| `--base-url <url>`                   | string | no       | API base URL                                                          |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--scope <authorized\|authorizable>` | string | no | Authorization scope: authorizable (default, full catalog), authorized |
+| `--model <model>` | string | no | Model ID (exact match) |
+| `--name <name>` | string | no | Fuzzy search by model name or ID |
+| `--page <n>` | number | no | Page number (default: 1) |
+| `--page-size <n>` | number | no | Results per page (default: 20) |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 
@@ -109,27 +109,27 @@ bl permission list --output text
 
 ### `bl permission revoke`
 
-| Field              | Value                                                                                                                                                         |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Name**           | `permission revoke`                                                                                                                                           |
-| **Description**    | Revoke model permissions (inference / finetune / deploy)                                                                                                      |
-| **Authentication** | API Key                                                                                                                                                       |
-| **Usage**          | `bl permission revoke --model <models> [--action <actions>] \| --all [flags]`                                                                                 |
-| **Risk**           | `high`                                                                                                                                                        |
-| **Risk message**   | This revokes model permissions and may interrupt inference, fine-tuning, or deployment workloads. With --all, it also clears all historical inference grants. |
+| Field | Value |
+| --- | --- |
+| **Name** | `permission revoke` |
+| **Description** | Revoke model permissions (inference / finetune / deploy) |
+| **Authentication** | API Key |
+| **Usage** | `bl permission revoke --model <models> [--action <actions>] \| --all [flags]` |
+| **Risk** | `high` |
+| **Risk message** | This revokes model permissions and may interrupt inference, fine-tuning, or deployment workloads. With --all, it also clears all historical inference grants. |
 
 > **Agent safety:** Never add `--yes` automatically. On `type="requires_confirmation"`, stop and ask for explicit user confirmation of the same action and scope.
 
 #### Flags
 
-| Flag                 | Type   | Required | Description                                                                             |
-| -------------------- | ------ | -------- | --------------------------------------------------------------------------------------- |
-| `--model <models>`   | string | no       | Model ID(s), comma-separated (max 20)                                                   |
-| `--action <actions>` | string | no       | Permission action(s), comma-separated: inference, finetune, deploy (default: inference) |
-| `--all`              | switch | no       | Close one-key authorization and clear ALL historical inference grants                   |
-| `--yes`              | switch | no       | Confirm this high-risk operation                                                        |
-| `--api-key <key>`    | string | no       | API key                                                                                 |
-| `--base-url <url>`   | string | no       | API base URL                                                                            |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--model <models>` | string | no | Model ID(s), comma-separated (max 20) |
+| `--action <actions>` | string | no | Permission action(s), comma-separated: inference, finetune, deploy (default: inference) |
+| `--all` | switch | no | Close one-key authorization and clear ALL historical inference grants |
+| `--yes` | switch | no | Confirm this high-risk operation |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 

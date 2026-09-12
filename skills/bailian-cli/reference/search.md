@@ -9,30 +9,30 @@ Index: [index.md](index.md)
 
 ## Commands in this group
 
-| Command         | Authentication | Description                                          |
-| --------------- | -------------- | ---------------------------------------------------- |
-| `bl search web` | API Key        | Search the web using DashScope MCP WebSearch service |
+| Command | Authentication | Description |
+| --- | --- | --- |
+| `bl search web` | API Key | Search the web using DashScope MCP WebSearch service |
 
 ## Command details
 
 ### `bl search web`
 
-| Field              | Value                                                |
-| ------------------ | ---------------------------------------------------- |
-| **Name**           | `search web`                                         |
-| **Description**    | Search the web using DashScope MCP WebSearch service |
-| **Authentication** | API Key                                              |
-| **Usage**          | `bl search web --query <text> [flags]`               |
+| Field | Value |
+| --- | --- |
+| **Name** | `search web` |
+| **Description** | Search the web using DashScope MCP WebSearch service |
+| **Authentication** | API Key |
+| **Usage** | `bl search web --query <text> [flags]` |
 
 #### Flags
 
-| Flag               | Type   | Required | Description                            |
-| ------------------ | ------ | -------- | -------------------------------------- |
-| `--query <text>`   | string | no       | Search query text                      |
-| `--count <n>`      | number | no       | Number of search results (default: 10) |
-| `--list-tools`     | switch | no       | List available MCP tools and exit      |
-| `--api-key <key>`  | string | no       | API key                                |
-| `--base-url <url>` | string | no       | API base URL                           |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--query <text>` | string | no | Search query text |
+| `--count <n>` | number | no | Number of search results (default: 10) |
+| `--list-tools` | switch | no | List available MCP tools and exit |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Examples
 

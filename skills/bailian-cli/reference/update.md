@@ -7,26 +7,26 @@ Index: [index.md](index.md)
 
 ## Commands in this group
 
-| Command     | Authentication | Description                                         |
-| ----------- | -------------- | --------------------------------------------------- |
-| `bl update` | No Auth        | Update the CLI to the latest or a specified version |
+| Command | Authentication | Description |
+| --- | --- | --- |
+| `bl update` | No Auth | Update the CLI to the latest or a specified version |
 
 ## Command details
 
 ### `bl update`
 
-| Field              | Value                                               |
-| ------------------ | --------------------------------------------------- |
-| **Name**           | `update`                                            |
-| **Description**    | Update the CLI to the latest or a specified version |
-| **Authentication** | No Auth                                             |
-| **Usage**          | `bl update [--to <version>]`                        |
+| Field | Value |
+| --- | --- |
+| **Name** | `update` |
+| **Description** | Update the CLI to the latest or a specified version |
+| **Authentication** | No Auth |
+| **Usage** | `bl update [--to <version>]` |
 
 #### Flags
 
-| Flag             | Type   | Required | Description                                      |
-| ---------------- | ------ | -------- | ------------------------------------------------ |
-| `--to <version>` | string | no       | Install this exact version instead of the latest |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--to <version>` | string | no | Install this exact version instead of the latest |
 
 #### Examples
 

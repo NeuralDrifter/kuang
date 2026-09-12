@@ -7,28 +7,28 @@ Index: [index.md](index.md)
 
 ## Commands in this group
 
-| Command                | Authentication | Description                                                                                    |
-| ---------------------- | -------------- | ---------------------------------------------------------------------------------------------- |
-| `bl advisor recommend` | API Key        | Recommend the best models for your use case (intent analysis → candidate recall → LLM ranking) |
+| Command | Authentication | Description |
+| --- | --- | --- |
+| `bl advisor recommend` | API Key | Recommend the best models for your use case (intent analysis → candidate recall → LLM ranking) |
 
 ## Command details
 
 ### `bl advisor recommend`
 
-| Field              | Value                                                                                          |
-| ------------------ | ---------------------------------------------------------------------------------------------- |
-| **Name**           | `advisor recommend`                                                                            |
-| **Description**    | Recommend the best models for your use case (intent analysis → candidate recall → LLM ranking) |
-| **Authentication** | API Key                                                                                        |
-| **Usage**          | `bl advisor recommend --message <text> [flags]`                                                |
+| Field | Value |
+| --- | --- |
+| **Name** | `advisor recommend` |
+| **Description** | Recommend the best models for your use case (intent analysis → candidate recall → LLM ranking) |
+| **Authentication** | API Key |
+| **Usage** | `bl advisor recommend --message <text> [flags]` |
 
 #### Flags
 
-| Flag               | Type   | Required | Description                |
-| ------------------ | ------ | -------- | -------------------------- |
-| `--message <text>` | string | yes      | Describe your requirements |
-| `--api-key <key>`  | string | no       | API key                    |
-| `--base-url <url>` | string | no       | API base URL               |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--message <text>` | string | yes | Describe your requirements |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Examples
 

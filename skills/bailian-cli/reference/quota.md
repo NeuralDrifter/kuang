@@ -7,35 +7,35 @@ Index: [index.md](index.md)
 
 ## Commands in this group
 
-| Command            | Authentication | Description                                                   |
-| ------------------ | -------------- | ------------------------------------------------------------- |
-| `bl quota check`   | Console        | Check current usage against rate limits                       |
-| `bl quota delete`  | API Key        | Clear all custom rate limits (QPM/TPM) for a model            |
-| `bl quota history` | Console        | View quota change history                                     |
-| `bl quota list`    | API Key        | View model rate limits (QPM/TPM, account and workspace level) |
-| `bl quota update`  | API Key        | Update model rate limits (QPM/TPM)                            |
+| Command | Authentication | Description |
+| --- | --- | --- |
+| `bl quota check` | Console | Check current usage against rate limits |
+| `bl quota delete` | API Key | Clear all custom rate limits (QPM/TPM) for a model |
+| `bl quota history` | Console | View quota change history |
+| `bl quota list` | API Key | View model rate limits (QPM/TPM, account and workspace level) |
+| `bl quota update` | API Key | Update model rate limits (QPM/TPM) |
 
 ## Command details
 
 ### `bl quota check`
 
-| Field              | Value                                      |
-| ------------------ | ------------------------------------------ |
-| **Name**           | `quota check`                              |
-| **Description**    | Check current usage against rate limits    |
-| **Authentication** | Console                                    |
-| **Usage**          | `bl quota check [--model <model>] [flags]` |
+| Field | Value |
+| --- | --- |
+| **Name** | `quota check` |
+| **Description** | Check current usage against rate limits |
+| **Authentication** | Console |
+| **Usage** | `bl quota check [--model <model>] [flags]` |
 
 #### Flags
 
-| Flag                           | Type   | Required | Description                                              |
-| ------------------------------ | ------ | -------- | -------------------------------------------------------- |
-| `--model <model>`              | string | no       | Model name(s), comma-separated                           |
-| `--period <minutes>`           | string | no       | Query usage for the last N minutes (default: 2)          |
-| `--console-region <region>`    | string | no       | Console gateway region (e.g. cn-beijing, ap-southeast-1) |
-| `--console-site <site>`        | string | no       | Console site: domestic, international                    |
-| `--console-switch-agent <uid>` | number | no       | Switch agent UID for delegated access                    |
-| `--workspace-id <id>`          | string | no       | Workspace ID (env: BAILIAN_WORKSPACE_ID)                 |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--model <model>` | string | no | Model name(s), comma-separated |
+| `--period <minutes>` | string | no | Query usage for the last N minutes (default: 2) |
+| `--console-region <region>` | string | no | Console gateway region (e.g. cn-beijing, ap-southeast-1) |
+| `--console-site <site>` | string | no | Console site: domestic, international |
+| `--console-switch-agent <uid>` | number | no | Switch agent UID for delegated access |
+| `--workspace-id <id>` | string | no | Workspace ID (env: BAILIAN_WORKSPACE_ID) |
 
 #### Examples
 
@@ -61,25 +61,25 @@ bl quota check --output json
 
 ### `bl quota delete`
 
-| Field              | Value                                                                                                |
-| ------------------ | ---------------------------------------------------------------------------------------------------- |
-| **Name**           | `quota delete`                                                                                       |
-| **Description**    | Clear all custom rate limits (QPM/TPM) for a model                                                   |
-| **Authentication** | API Key                                                                                              |
-| **Usage**          | `bl quota delete --model <model>`                                                                    |
-| **Risk**           | `high`                                                                                               |
-| **Risk message**   | This permanently clears all custom QPM/TPM rate limits for the specified model and cannot be undone. |
+| Field | Value |
+| --- | --- |
+| **Name** | `quota delete` |
+| **Description** | Clear all custom rate limits (QPM/TPM) for a model |
+| **Authentication** | API Key |
+| **Usage** | `bl quota delete --model <model>` |
+| **Risk** | `high` |
+| **Risk message** | This permanently clears all custom QPM/TPM rate limits for the specified model and cannot be undone. |
 
 > **Agent safety:** Never add `--yes` automatically. On `type="requires_confirmation"`, stop and ask for explicit user confirmation of the same action and scope.
 
 #### Flags
 
-| Flag               | Type   | Required | Description                      |
-| ------------------ | ------ | -------- | -------------------------------- |
-| `--model <model>`  | string | yes      | Model name (required)            |
-| `--yes`            | switch | no       | Confirm this high-risk operation |
-| `--api-key <key>`  | string | no       | API key                          |
-| `--base-url <url>` | string | no       | API base URL                     |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--model <model>` | string | yes | Model name (required) |
+| `--yes` | switch | no | Confirm this high-risk operation |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Examples
 
@@ -98,24 +98,24 @@ bl quota delete --model qwen-plus --yes
 
 ### `bl quota history`
 
-| Field              | Value                      |
-| ------------------ | -------------------------- |
-| **Name**           | `quota history`            |
-| **Description**    | View quota change history  |
-| **Authentication** | Console                    |
-| **Usage**          | `bl quota history [flags]` |
+| Field | Value |
+| --- | --- |
+| **Name** | `quota history` |
+| **Description** | View quota change history |
+| **Authentication** | Console |
+| **Usage** | `bl quota history [flags]` |
 
 #### Flags
 
-| Flag                           | Type   | Required | Description                                              |
-| ------------------------------ | ------ | -------- | -------------------------------------------------------- |
-| `--page <n>`                   | string | no       | Page number (default: 1)                                 |
-| `--page-size <n>`              | string | no       | Page size (default: 10)                                  |
-| `--model <model>`              | string | no       | Filter by model name                                     |
-| `--console-region <region>`    | string | no       | Console gateway region (e.g. cn-beijing, ap-southeast-1) |
-| `--console-site <site>`        | string | no       | Console site: domestic, international                    |
-| `--console-switch-agent <uid>` | number | no       | Switch agent UID for delegated access                    |
-| `--workspace-id <id>`          | string | no       | Workspace ID (env: BAILIAN_WORKSPACE_ID)                 |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--page <n>` | string | no | Page number (default: 1) |
+| `--page-size <n>` | string | no | Page size (default: 10) |
+| `--model <model>` | string | no | Filter by model name |
+| `--console-region <region>` | string | no | Console gateway region (e.g. cn-beijing, ap-southeast-1) |
+| `--console-site <site>` | string | no | Console site: domestic, international |
+| `--console-switch-agent <uid>` | number | no | Switch agent UID for delegated access |
+| `--workspace-id <id>` | string | no | Workspace ID (env: BAILIAN_WORKSPACE_ID) |
 
 #### Examples
 
@@ -141,23 +141,23 @@ bl quota history --output json
 
 ### `bl quota list`
 
-| Field              | Value                                                                            |
-| ------------------ | -------------------------------------------------------------------------------- |
-| **Name**           | `quota list`                                                                     |
-| **Description**    | View model rate limits (QPM/TPM, account and workspace level)                    |
-| **Authentication** | API Key                                                                          |
-| **Usage**          | `bl quota list [--model <model>] [--name <name>] [--page <n>] [--page-size <n>]` |
+| Field | Value |
+| --- | --- |
+| **Name** | `quota list` |
+| **Description** | View model rate limits (QPM/TPM, account and workspace level) |
+| **Authentication** | API Key |
+| **Usage** | `bl quota list [--model <model>] [--name <name>] [--page <n>] [--page-size <n>]` |
 
 #### Flags
 
-| Flag               | Type   | Required | Description                                  |
-| ------------------ | ------ | -------- | -------------------------------------------- |
-| `--model <model>`  | string | no       | Model name(s), comma-separated (exact match) |
-| `--name <name>`    | string | no       | Fuzzy search by model name                   |
-| `--page <n>`       | number | no       | Page number (default: 1)                     |
-| `--page-size <n>`  | number | no       | Results per page (default: 20)               |
-| `--api-key <key>`  | string | no       | API key                                      |
-| `--base-url <url>` | string | no       | API base URL                                 |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--model <model>` | string | no | Model name(s), comma-separated (exact match) |
+| `--name <name>` | string | no | Fuzzy search by model name |
+| `--page <n>` | number | no | Page number (default: 1) |
+| `--page-size <n>` | number | no | Results per page (default: 20) |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 
@@ -187,22 +187,22 @@ bl quota list --output json
 
 ### `bl quota update`
 
-| Field              | Value                                                     |
-| ------------------ | --------------------------------------------------------- |
-| **Name**           | `quota update`                                            |
-| **Description**    | Update model rate limits (QPM/TPM)                        |
-| **Authentication** | API Key                                                   |
-| **Usage**          | `bl quota update --model <model> [--rpm <n>] [--tpm <n>]` |
+| Field | Value |
+| --- | --- |
+| **Name** | `quota update` |
+| **Description** | Update model rate limits (QPM/TPM) |
+| **Authentication** | API Key |
+| **Usage** | `bl quota update --model <model> [--rpm <n>] [--tpm <n>]` |
 
 #### Flags
 
-| Flag               | Type   | Required | Description                   |
-| ------------------ | ------ | -------- | ----------------------------- |
-| `--model <model>`  | string | yes      | Model name (required)         |
-| `--rpm <n>`        | number | no       | Max requests per minute (QPM) |
-| `--tpm <n>`        | number | no       | Max tokens per minute (TPM)   |
-| `--api-key <key>`  | string | no       | API key                       |
-| `--base-url <url>` | string | no       | API base URL                  |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--model <model>` | string | yes | Model name (required) |
+| `--rpm <n>` | number | no | Max requests per minute (QPM) |
+| `--tpm <n>` | number | no | Max tokens per minute (TPM) |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 

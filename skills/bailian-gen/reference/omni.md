@@ -7,40 +7,40 @@ Index: [index.md](index.md)
 
 ## Commands in this group
 
-| Command   | Authentication | Description                                          |
-| --------- | -------------- | ---------------------------------------------------- |
-| `bl omni` | API Key        | Multimodal chat with text + audio output (Qwen-Omni) |
+| Command | Authentication | Description |
+| --- | --- | --- |
+| `bl omni` | API Key | Multimodal chat with text + audio output (Qwen-Omni) |
 
 ## Command details
 
 ### `bl omni`
 
-| Field              | Value                                                |
-| ------------------ | ---------------------------------------------------- |
-| **Name**           | `omni`                                               |
-| **Description**    | Multimodal chat with text + audio output (Qwen-Omni) |
-| **Authentication** | API Key                                              |
-| **Usage**          | `bl omni --message <text> [flags]`                   |
+| Field | Value |
+| --- | --- |
+| **Name** | `omni` |
+| **Description** | Multimodal chat with text + audio output (Qwen-Omni) |
+| **Authentication** | API Key |
+| **Usage** | `bl omni --message <text> [flags]` |
 
 #### Flags
 
-| Flag                   | Type   | Required | Description                                                           |
-| ---------------------- | ------ | -------- | --------------------------------------------------------------------- |
-| `--message <text>`     | array  | no       | Message text (repeatable, prefix role: to set role)                   |
-| `--model <model>`      | string | no       | Model ID (default: qwen3.5-omni-plus)                                 |
-| `--system <text>`      | string | no       | System prompt                                                         |
-| `--image <url>`        | array  | no       | Image URL or local file (repeatable)                                  |
-| `--audio <url>`        | array  | no       | Audio URL or local file (.wav/.mp3/.amr/.aac/.m4a/.ogg/.3gp/.3gpp)    |
-| `--video <url>`        | array  | no       | Video file URL / local path, or comma-separated frame URLs            |
-| `--voice <voice>`      | string | no       | Output voice ID (default: Tina). Use --list-voices to see all options |
-| `--list-voices`        | switch | no       | List available output voices and exit                                 |
-| `--audio-format <fmt>` | string | no       | Audio output format (default: wav)                                    |
-| `--audio-out <path>`   | string | no       | Save audio to file (default: auto-generate)                           |
-| `--text-only`          | switch | no       | Output text only, no audio generation                                 |
-| `--max-tokens <n>`     | number | no       | Maximum tokens to generate                                            |
-| `--temperature <n>`    | number | no       | Sampling temperature (0.0, 2.0]                                       |
-| `--api-key <key>`      | string | no       | API key                                                               |
-| `--base-url <url>`     | string | no       | API base URL                                                          |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--message <text>` | array | no | Message text (repeatable, prefix role: to set role) |
+| `--model <model>` | string | no | Model ID (default: qwen3.5-omni-plus) |
+| `--system <text>` | string | no | System prompt |
+| `--image <url>` | array | no | Image URL or local file (repeatable) |
+| `--audio <url>` | array | no | Audio URL or local file (.wav/.mp3/.amr/.aac/.m4a/.ogg/.3gp/.3gpp) |
+| `--video <url>` | array | no | Video file URL / local path, or comma-separated frame URLs |
+| `--voice <voice>` | string | no | Output voice ID (default: Tina). Use --list-voices to see all options |
+| `--list-voices` | switch | no | List available output voices and exit |
+| `--audio-format <fmt>` | string | no | Audio output format (default: wav) |
+| `--audio-out <path>` | string | no | Save audio to file (default: auto-generate) |
+| `--text-only` | switch | no | Output text only, no audio generation |
+| `--max-tokens <n>` | number | no | Maximum tokens to generate |
+| `--temperature <n>` | number | no | Sampling temperature (0.0, 2.0] |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Examples
 

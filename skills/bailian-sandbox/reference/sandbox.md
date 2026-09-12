@@ -7,46 +7,46 @@ Index: [index.md](index.md)
 
 ## Commands in this group
 
-| Command                            | Authentication | Description                                                     |
-| ---------------------------------- | -------------- | --------------------------------------------------------------- |
-| `bl sandbox connect`               | API Key        | Connect to a Sandbox instance and return connection information |
-| `bl sandbox create`                | API Key        | Create a Sandbox instance                                       |
-| `bl sandbox delete`                | API Key        | Release a Sandbox instance                                      |
-| `bl sandbox file upload`           | API Key        | Upload a workspace file for Sandbox template mounts             |
-| `bl sandbox get`                   | API Key        | Get Sandbox instance details                                    |
-| `bl sandbox list`                  | API Key        | List Sandbox instances                                          |
-| `bl sandbox official-images`       | No Auth        | List the built-in Sandbox base images (offline)                 |
-| `bl sandbox pause`                 | API Key        | Pause a Sandbox instance                                        |
-| `bl sandbox resume`                | API Key        | Resume a Sandbox instance and return connection information     |
-| `bl sandbox template build-status` | API Key        | Get Sandbox template build status                               |
-| `bl sandbox template create`       | API Key        | Create a Sandbox template                                       |
-| `bl sandbox template delete`       | API Key        | Delete a Sandbox template                                       |
-| `bl sandbox template get`          | API Key        | Get Sandbox template details                                    |
-| `bl sandbox template list`         | API Key        | List Sandbox templates                                          |
-| `bl sandbox template update`       | API Key        | Update a Sandbox template                                       |
+| Command | Authentication | Description |
+| --- | --- | --- |
+| `bl sandbox connect` | API Key | Connect to a Sandbox instance and return connection information |
+| `bl sandbox create` | API Key | Create a Sandbox instance |
+| `bl sandbox delete` | API Key | Release a Sandbox instance |
+| `bl sandbox file upload` | API Key | Upload a workspace file for Sandbox template mounts |
+| `bl sandbox get` | API Key | Get Sandbox instance details |
+| `bl sandbox list` | API Key | List Sandbox instances |
+| `bl sandbox official-images` | No Auth | List the built-in Sandbox base images (offline) |
+| `bl sandbox pause` | API Key | Pause a Sandbox instance |
+| `bl sandbox resume` | API Key | Resume a Sandbox instance and return connection information |
+| `bl sandbox template build-status` | API Key | Get Sandbox template build status |
+| `bl sandbox template create` | API Key | Create a Sandbox template |
+| `bl sandbox template delete` | API Key | Delete a Sandbox template |
+| `bl sandbox template get` | API Key | Get Sandbox template details |
+| `bl sandbox template list` | API Key | List Sandbox templates |
+| `bl sandbox template update` | API Key | Update a Sandbox template |
 
 ## Command details
 
 ### `bl sandbox connect`
 
-| Field              | Value                                                                                      |
-| ------------------ | ------------------------------------------------------------------------------------------ |
-| **Name**           | `sandbox connect`                                                                          |
-| **Description**    | Connect to a Sandbox instance and return connection information                            |
-| **Authentication** | API Key                                                                                    |
-| **Usage**          | `bl sandbox connect --sandbox-id <id> [--instance-timeout <seconds>] [--show-credentials]` |
+| Field | Value |
+| --- | --- |
+| **Name** | `sandbox connect` |
+| **Description** | Connect to a Sandbox instance and return connection information |
+| **Authentication** | API Key |
+| **Usage** | `bl sandbox connect --sandbox-id <id> [--instance-timeout <seconds>] [--show-credentials]` |
 
 #### Flags
 
-| Flag                           | Type   | Required | Description                                                                        |
-| ------------------------------ | ------ | -------- | ---------------------------------------------------------------------------------- |
-| `--workspace-id <id>`          | string | no       | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
-| `--sandbox-id <id>`            | string | yes      | Sandbox instance ID                                                                |
-| `--body <json\|@path>`         | string | no       | JSON request body, inline or loaded from an @file path; explicit flags override it |
-| `--instance-timeout <seconds>` | number | no       | Sandbox lifetime after this operation (300-604800 seconds)                         |
-| `--show-credentials`           | switch | no       | Print envd and traffic access tokens instead of redacting them                     |
-| `--api-key <key>`              | string | no       | API key                                                                            |
-| `--base-url <url>`             | string | no       | API base URL                                                                       |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--workspace-id <id>` | string | no | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
+| `--sandbox-id <id>` | string | yes | Sandbox instance ID |
+| `--body <json\|@path>` | string | no | JSON request body, inline or loaded from an @file path; explicit flags override it |
+| `--instance-timeout <seconds>` | number | no | Sandbox lifetime after this operation (300-604800 seconds) |
+| `--show-credentials` | switch | no | Print envd and traffic access tokens instead of redacting them |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 
@@ -68,32 +68,32 @@ bl sandbox connect --sandbox-id sbx-xxx --show-credentials --output json
 
 ### `bl sandbox create`
 
-| Field              | Value                                                                    |
-| ------------------ | ------------------------------------------------------------------------ |
-| **Name**           | `sandbox create`                                                         |
-| **Description**    | Create a Sandbox instance                                                |
-| **Authentication** | API Key                                                                  |
-| **Usage**          | `bl sandbox create (--template-id <id> \| --body <json\|@path>) [flags]` |
+| Field | Value |
+| --- | --- |
+| **Name** | `sandbox create` |
+| **Description** | Create a Sandbox instance |
+| **Authentication** | API Key |
+| **Usage** | `bl sandbox create (--template-id <id> \| --body <json\|@path>) [flags]` |
 
 #### Flags
 
-| Flag                             | Type    | Required | Description                                                                        |
-| -------------------------------- | ------- | -------- | ---------------------------------------------------------------------------------- |
-| `--workspace-id <id>`            | string  | no       | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
-| `--body <json\|@path>`           | string  | no       | JSON request body, inline or loaded from an @file path; explicit flags override it |
-| `--template-id <id>`             | string  | no       | Ready template ID; may alternatively be supplied as templateID in --body           |
-| `--instance-timeout <seconds>`   | number  | no       | Sandbox lifetime after this operation (300-604800 seconds)                         |
-| `--allow-internet-access <bool>` | boolean | no       | Allow public internet access                                                       |
-| `--metadata <key=value>`         | array   | no       | Instance metadata entry; repeat for multiple values                                |
-| `--env <key=value>`              | array   | no       | Instance environment variable; repeat for multiple values                          |
-| `--auto-pause <bool>`            | boolean | no       | Pause the instance when its timeout expires                                        |
-| `--auto-resume <bool>`           | boolean | no       | Automatically resume a paused instance when connecting                             |
-| `--allow-out <address>`          | array   | no       | Outbound allow-list entry; repeat for multiple values                              |
-| `--deny-out <address>`           | array   | no       | Outbound deny-list entry; repeat for multiple values                               |
-| `--mask-request-host <host>`     | string  | no       | Override the outbound request Host header                                          |
-| `--show-credentials`             | switch  | no       | Print envd and traffic access tokens instead of redacting them                     |
-| `--api-key <key>`                | string  | no       | API key                                                                            |
-| `--base-url <url>`               | string  | no       | API base URL                                                                       |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--workspace-id <id>` | string | no | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
+| `--body <json\|@path>` | string | no | JSON request body, inline or loaded from an @file path; explicit flags override it |
+| `--template-id <id>` | string | no | Ready template ID; may alternatively be supplied as templateID in --body |
+| `--instance-timeout <seconds>` | number | no | Sandbox lifetime after this operation (300-604800 seconds) |
+| `--allow-internet-access <bool>` | boolean | no | Allow public internet access |
+| `--metadata <key=value>` | array | no | Instance metadata entry; repeat for multiple values |
+| `--env <key=value>` | array | no | Instance environment variable; repeat for multiple values |
+| `--auto-pause <bool>` | boolean | no | Pause the instance when its timeout expires |
+| `--auto-resume <bool>` | boolean | no | Automatically resume a paused instance when connecting |
+| `--allow-out <address>` | array | no | Outbound allow-list entry; repeat for multiple values |
+| `--deny-out <address>` | array | no | Outbound deny-list entry; repeat for multiple values |
+| `--mask-request-host <host>` | string | no | Override the outbound request Host header |
+| `--show-credentials` | switch | no | Print envd and traffic access tokens instead of redacting them |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 
@@ -123,26 +123,26 @@ bl sandbox create --template-id tpl-xxx --show-credentials --output json
 
 ### `bl sandbox delete`
 
-| Field              | Value                                                                |
-| ------------------ | -------------------------------------------------------------------- |
-| **Name**           | `sandbox delete`                                                     |
-| **Description**    | Release a Sandbox instance                                           |
-| **Authentication** | API Key                                                              |
-| **Usage**          | `bl sandbox delete --sandbox-id <id>`                                |
-| **Risk**           | `high`                                                               |
-| **Risk message**   | This permanently releases the Sandbox instance and cannot be undone. |
+| Field | Value |
+| --- | --- |
+| **Name** | `sandbox delete` |
+| **Description** | Release a Sandbox instance |
+| **Authentication** | API Key |
+| **Usage** | `bl sandbox delete --sandbox-id <id>` |
+| **Risk** | `high` |
+| **Risk message** | This permanently releases the Sandbox instance and cannot be undone. |
 
 > **Agent safety:** Never add `--yes` automatically. On `type="requires_confirmation"`, stop and ask for explicit user confirmation of the same action and scope.
 
 #### Flags
 
-| Flag                  | Type   | Required | Description                                                                        |
-| --------------------- | ------ | -------- | ---------------------------------------------------------------------------------- |
-| `--workspace-id <id>` | string | no       | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
-| `--sandbox-id <id>`   | string | yes      | Sandbox instance ID                                                                |
-| `--yes`               | switch | no       | Confirm this high-risk operation                                                   |
-| `--api-key <key>`     | string | no       | API key                                                                            |
-| `--base-url <url>`    | string | no       | API base URL                                                                       |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--workspace-id <id>` | string | no | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
+| `--sandbox-id <id>` | string | yes | Sandbox instance ID |
+| `--yes` | switch | no | Confirm this high-risk operation |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 
@@ -165,23 +165,23 @@ bl sandbox delete --sandbox-id sbx-xxx --yes
 
 ### `bl sandbox file upload`
 
-| Field              | Value                                                                           |
-| ------------------ | ------------------------------------------------------------------------------- |
-| **Name**           | `sandbox file upload`                                                           |
-| **Description**    | Upload a workspace file for Sandbox template mounts                             |
-| **Authentication** | API Key                                                                         |
-| **Usage**          | `bl sandbox file upload --path <path> [--filename <name>] [--mime-type <type>]` |
+| Field | Value |
+| --- | --- |
+| **Name** | `sandbox file upload` |
+| **Description** | Upload a workspace file for Sandbox template mounts |
+| **Authentication** | API Key |
+| **Usage** | `bl sandbox file upload --path <path> [--filename <name>] [--mime-type <type>]` |
 
 #### Flags
 
-| Flag                  | Type   | Required | Description                                                                        |
-| --------------------- | ------ | -------- | ---------------------------------------------------------------------------------- |
-| `--workspace-id <id>` | string | no       | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
-| `--path <path>`       | string | yes      | Local file path                                                                    |
-| `--filename <name>`   | string | no       | Remote filename override                                                           |
-| `--mime-type <type>`  | string | no       | Multipart file MIME type (default: application/octet-stream)                       |
-| `--api-key <key>`     | string | no       | API key                                                                            |
-| `--base-url <url>`    | string | no       | API base URL                                                                       |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--workspace-id <id>` | string | no | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
+| `--path <path>` | string | yes | Local file path |
+| `--filename <name>` | string | no | Remote filename override |
+| `--mime-type <type>` | string | no | Multipart file MIME type (default: application/octet-stream) |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 
@@ -206,22 +206,22 @@ bl sandbox file upload --path ./notes.txt --filename notes.txt --mime-type text/
 
 ### `bl sandbox get`
 
-| Field              | Value                                                   |
-| ------------------ | ------------------------------------------------------- |
-| **Name**           | `sandbox get`                                           |
-| **Description**    | Get Sandbox instance details                            |
-| **Authentication** | API Key                                                 |
-| **Usage**          | `bl sandbox get --sandbox-id <id> [--show-credentials]` |
+| Field | Value |
+| --- | --- |
+| **Name** | `sandbox get` |
+| **Description** | Get Sandbox instance details |
+| **Authentication** | API Key |
+| **Usage** | `bl sandbox get --sandbox-id <id> [--show-credentials]` |
 
 #### Flags
 
-| Flag                  | Type   | Required | Description                                                                        |
-| --------------------- | ------ | -------- | ---------------------------------------------------------------------------------- |
-| `--workspace-id <id>` | string | no       | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
-| `--sandbox-id <id>`   | string | yes      | Sandbox instance ID                                                                |
-| `--show-credentials`  | switch | no       | Print envd and traffic access tokens instead of redacting them                     |
-| `--api-key <key>`     | string | no       | API key                                                                            |
-| `--base-url <url>`    | string | no       | API base URL                                                                       |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--workspace-id <id>` | string | no | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
+| `--sandbox-id <id>` | string | yes | Sandbox instance ID |
+| `--show-credentials` | switch | no | Print envd and traffic access tokens instead of redacting them |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 
@@ -243,24 +243,24 @@ bl sandbox get --sandbox-id sbx-xxx --show-credentials --output json
 
 ### `bl sandbox list`
 
-| Field              | Value                                                                                      |
-| ------------------ | ------------------------------------------------------------------------------------------ |
-| **Name**           | `sandbox list`                                                                             |
-| **Description**    | List Sandbox instances                                                                     |
-| **Authentication** | API Key                                                                                    |
-| **Usage**          | `bl sandbox list [--template-id <id>] [--sandbox-id <id>] [--state <state>] [--limit <n>]` |
+| Field | Value |
+| --- | --- |
+| **Name** | `sandbox list` |
+| **Description** | List Sandbox instances |
+| **Authentication** | API Key |
+| **Usage** | `bl sandbox list [--template-id <id>] [--sandbox-id <id>] [--state <state>] [--limit <n>]` |
 
 #### Flags
 
-| Flag                  | Type   | Required | Description                                                                        |
-| --------------------- | ------ | -------- | ---------------------------------------------------------------------------------- |
-| `--workspace-id <id>` | string | no       | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
-| `--template-id <id>`  | string | no       | Filter by template ID                                                              |
-| `--sandbox-id <id>`   | string | no       | Filter by sandbox ID                                                               |
-| `--state <state>`     | string | no       | Filter by state, for example running or paused                                     |
-| `--limit <n>`         | number | no       | Maximum results (1-50)                                                             |
-| `--api-key <key>`     | string | no       | API key                                                                            |
-| `--base-url <url>`    | string | no       | API base URL                                                                       |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--workspace-id <id>` | string | no | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
+| `--template-id <id>` | string | no | Filter by template ID |
+| `--sandbox-id <id>` | string | no | Filter by sandbox ID |
+| `--state <state>` | string | no | Filter by state, for example running or paused |
+| `--limit <n>` | number | no | Maximum results (1-50) |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 
@@ -286,12 +286,12 @@ bl sandbox list --template-id tpl-xxx --output json
 
 ### `bl sandbox official-images`
 
-| Field              | Value                                           |
-| ------------------ | ----------------------------------------------- |
-| **Name**           | `sandbox official-images`                       |
-| **Description**    | List the built-in Sandbox base images (offline) |
-| **Authentication** | No Auth                                         |
-| **Usage**          | `bl sandbox official-images`                    |
+| Field | Value |
+| --- | --- |
+| **Name** | `sandbox official-images` |
+| **Description** | List the built-in Sandbox base images (offline) |
+| **Authentication** | No Auth |
+| **Usage** | `bl sandbox official-images` |
 
 #### Flags
 
@@ -320,21 +320,21 @@ bl sandbox official-images --quiet
 
 ### `bl sandbox pause`
 
-| Field              | Value                                |
-| ------------------ | ------------------------------------ |
-| **Name**           | `sandbox pause`                      |
-| **Description**    | Pause a Sandbox instance             |
-| **Authentication** | API Key                              |
-| **Usage**          | `bl sandbox pause --sandbox-id <id>` |
+| Field | Value |
+| --- | --- |
+| **Name** | `sandbox pause` |
+| **Description** | Pause a Sandbox instance |
+| **Authentication** | API Key |
+| **Usage** | `bl sandbox pause --sandbox-id <id>` |
 
 #### Flags
 
-| Flag                  | Type   | Required | Description                                                                        |
-| --------------------- | ------ | -------- | ---------------------------------------------------------------------------------- |
-| `--workspace-id <id>` | string | no       | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
-| `--sandbox-id <id>`   | string | yes      | Sandbox instance ID                                                                |
-| `--api-key <key>`     | string | no       | API key                                                                            |
-| `--base-url <url>`    | string | no       | API base URL                                                                       |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--workspace-id <id>` | string | no | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
+| `--sandbox-id <id>` | string | yes | Sandbox instance ID |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 
@@ -356,24 +356,24 @@ bl sandbox pause --sandbox-id sbx-xxx --dry-run --output json
 
 ### `bl sandbox resume`
 
-| Field              | Value                                                                                     |
-| ------------------ | ----------------------------------------------------------------------------------------- |
-| **Name**           | `sandbox resume`                                                                          |
-| **Description**    | Resume a Sandbox instance and return connection information                               |
-| **Authentication** | API Key                                                                                   |
-| **Usage**          | `bl sandbox resume --sandbox-id <id> [--instance-timeout <seconds>] [--show-credentials]` |
+| Field | Value |
+| --- | --- |
+| **Name** | `sandbox resume` |
+| **Description** | Resume a Sandbox instance and return connection information |
+| **Authentication** | API Key |
+| **Usage** | `bl sandbox resume --sandbox-id <id> [--instance-timeout <seconds>] [--show-credentials]` |
 
 #### Flags
 
-| Flag                           | Type   | Required | Description                                                                        |
-| ------------------------------ | ------ | -------- | ---------------------------------------------------------------------------------- |
-| `--workspace-id <id>`          | string | no       | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
-| `--sandbox-id <id>`            | string | yes      | Sandbox instance ID                                                                |
-| `--body <json\|@path>`         | string | no       | JSON request body, inline or loaded from an @file path; explicit flags override it |
-| `--instance-timeout <seconds>` | number | no       | Sandbox lifetime after this operation (300-604800 seconds)                         |
-| `--show-credentials`           | switch | no       | Print envd and traffic access tokens instead of redacting them                     |
-| `--api-key <key>`              | string | no       | API key                                                                            |
-| `--base-url <url>`             | string | no       | API base URL                                                                       |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--workspace-id <id>` | string | no | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
+| `--sandbox-id <id>` | string | yes | Sandbox instance ID |
+| `--body <json\|@path>` | string | no | JSON request body, inline or loaded from an @file path; explicit flags override it |
+| `--instance-timeout <seconds>` | number | no | Sandbox lifetime after this operation (300-604800 seconds) |
+| `--show-credentials` | switch | no | Print envd and traffic access tokens instead of redacting them |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 
@@ -395,22 +395,22 @@ bl sandbox resume --sandbox-id sbx-xxx --show-credentials --output json
 
 ### `bl sandbox template build-status`
 
-| Field              | Value                                                                 |
-| ------------------ | --------------------------------------------------------------------- |
-| **Name**           | `sandbox template build-status`                                       |
-| **Description**    | Get Sandbox template build status                                     |
-| **Authentication** | API Key                                                               |
-| **Usage**          | `bl sandbox template build-status --template-id <id> --build-id <id>` |
+| Field | Value |
+| --- | --- |
+| **Name** | `sandbox template build-status` |
+| **Description** | Get Sandbox template build status |
+| **Authentication** | API Key |
+| **Usage** | `bl sandbox template build-status --template-id <id> --build-id <id>` |
 
 #### Flags
 
-| Flag                  | Type   | Required | Description                                                                        |
-| --------------------- | ------ | -------- | ---------------------------------------------------------------------------------- |
-| `--workspace-id <id>` | string | no       | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
-| `--template-id <id>`  | string | yes      | Sandbox template ID                                                                |
-| `--build-id <id>`     | string | yes      | Template build ID                                                                  |
-| `--api-key <key>`     | string | no       | API key                                                                            |
-| `--base-url <url>`    | string | no       | API base URL                                                                       |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--workspace-id <id>` | string | no | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
+| `--template-id <id>` | string | yes | Sandbox template ID |
+| `--build-id <id>` | string | yes | Template build ID |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 
@@ -432,37 +432,37 @@ bl sandbox template build-status --template-id tpl-xxx --build-id build-xxx --ou
 
 ### `bl sandbox template create`
 
-| Field              | Value                                                                                                             |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| **Name**           | `sandbox template create`                                                                                         |
-| **Description**    | Create a Sandbox template                                                                                         |
-| **Authentication** | API Key                                                                                                           |
-| **Usage**          | `bl sandbox template create (--name <name> --cpu-count <cores> --memory-mb <mb> \| --body <json\|@path>) [flags]` |
+| Field | Value |
+| --- | --- |
+| **Name** | `sandbox template create` |
+| **Description** | Create a Sandbox template |
+| **Authentication** | API Key |
+| **Usage** | `bl sandbox template create (--name <name> --cpu-count <cores> --memory-mb <mb> \| --body <json\|@path>) [flags]` |
 
 #### Flags
 
-| Flag                                                                          | Type   | Required | Description                                                                        |
-| ----------------------------------------------------------------------------- | ------ | -------- | ---------------------------------------------------------------------------------- |
-| `--workspace-id <id>`                                                         | string | no       | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
-| `--body <json\|@path>`                                                        | string | no       | JSON request body, inline or loaded from an @file path; explicit flags override it |
-| `--image <code-interpreter\|代码解释器\|browser\|浏览器\|all-in-one\|全能型>` | string | no       | Built-in image ID or Chinese name; fills fromImage and imageName                   |
-| `--name <name>`                                                               | string | no       | Template name                                                                      |
-| `--cpu-count <cores>`                                                         | number | no       | vCPU count                                                                         |
-| `--memory-mb <mb>`                                                            | number | no       | Memory in MB                                                                       |
-| `--from-image <image>`                                                        | string | no       | Base image identifier                                                              |
-| `--image-name <name>`                                                         | string | no       | Base image display name                                                            |
-| `--env <key=value>`                                                           | array  | no       | Template environment variable; repeat for multiple values                          |
-| `--allow-out <address>`                                                       | array  | no       | Outbound allow-list entry; repeat for multiple values                              |
-| `--deny-out <address>`                                                        | array  | no       | Outbound deny-list entry; repeat for multiple values                               |
-| `--auto-pause-time <seconds>`                                                 | number | no       | Automatically pause after 300-604800 seconds                                       |
-| `--max-running-time <seconds>`                                                | number | no       | Maximum running lifetime in seconds (300-604800)                                   |
-| `--description <text>`                                                        | string | no       | Template description                                                               |
-| `--tag <tag>`                                                                 | array  | no       | E2B tag; repeat for multiple values                                                |
-| `--alias <alias>`                                                             | string | no       | E2B template alias                                                                 |
-| `--async`                                                                     | switch | no       | Return the submitted templateID/buildID immediately without polling                |
-| `--poll-interval <seconds>`                                                   | number | no       | Template build polling interval (default: 5 seconds)                               |
-| `--api-key <key>`                                                             | string | no       | API key                                                                            |
-| `--base-url <url>`                                                            | string | no       | API base URL                                                                       |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--workspace-id <id>` | string | no | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
+| `--body <json\|@path>` | string | no | JSON request body, inline or loaded from an @file path; explicit flags override it |
+| `--image <code-interpreter\|代码解释器\|browser\|浏览器\|all-in-one\|全能型>` | string | no | Built-in image ID or Chinese name; fills fromImage and imageName |
+| `--name <name>` | string | no | Template name |
+| `--cpu-count <cores>` | number | no | vCPU count |
+| `--memory-mb <mb>` | number | no | Memory in MB |
+| `--from-image <image>` | string | no | Base image identifier |
+| `--image-name <name>` | string | no | Base image display name |
+| `--env <key=value>` | array | no | Template environment variable; repeat for multiple values |
+| `--allow-out <address>` | array | no | Outbound allow-list entry; repeat for multiple values |
+| `--deny-out <address>` | array | no | Outbound deny-list entry; repeat for multiple values |
+| `--auto-pause-time <seconds>` | number | no | Automatically pause after 300-604800 seconds |
+| `--max-running-time <seconds>` | number | no | Maximum running lifetime in seconds (300-604800) |
+| `--description <text>` | string | no | Template description |
+| `--tag <tag>` | array | no | E2B tag; repeat for multiple values |
+| `--alias <alias>` | string | no | E2B template alias |
+| `--async` | switch | no | Return the submitted templateID/buildID immediately without polling |
+| `--poll-interval <seconds>` | number | no | Template build polling interval (default: 5 seconds) |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 
@@ -498,26 +498,26 @@ bl sandbox template create --name browser --cpu-count 4 --memory-mb 8192 --dry-r
 
 ### `bl sandbox template delete`
 
-| Field              | Value                                                               |
-| ------------------ | ------------------------------------------------------------------- |
-| **Name**           | `sandbox template delete`                                           |
-| **Description**    | Delete a Sandbox template                                           |
-| **Authentication** | API Key                                                             |
-| **Usage**          | `bl sandbox template delete --template-id <id>`                     |
-| **Risk**           | `high`                                                              |
-| **Risk message**   | This permanently deletes the Sandbox template and cannot be undone. |
+| Field | Value |
+| --- | --- |
+| **Name** | `sandbox template delete` |
+| **Description** | Delete a Sandbox template |
+| **Authentication** | API Key |
+| **Usage** | `bl sandbox template delete --template-id <id>` |
+| **Risk** | `high` |
+| **Risk message** | This permanently deletes the Sandbox template and cannot be undone. |
 
 > **Agent safety:** Never add `--yes` automatically. On `type="requires_confirmation"`, stop and ask for explicit user confirmation of the same action and scope.
 
 #### Flags
 
-| Flag                  | Type   | Required | Description                                                                        |
-| --------------------- | ------ | -------- | ---------------------------------------------------------------------------------- |
-| `--workspace-id <id>` | string | no       | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
-| `--template-id <id>`  | string | yes      | Sandbox template ID                                                                |
-| `--yes`               | switch | no       | Confirm this high-risk operation                                                   |
-| `--api-key <key>`     | string | no       | API key                                                                            |
-| `--base-url <url>`    | string | no       | API base URL                                                                       |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--workspace-id <id>` | string | no | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
+| `--template-id <id>` | string | yes | Sandbox template ID |
+| `--yes` | switch | no | Confirm this high-risk operation |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 
@@ -541,21 +541,21 @@ bl sandbox template delete --template-id tpl-xxx --yes
 
 ### `bl sandbox template get`
 
-| Field              | Value                                        |
-| ------------------ | -------------------------------------------- |
-| **Name**           | `sandbox template get`                       |
-| **Description**    | Get Sandbox template details                 |
-| **Authentication** | API Key                                      |
-| **Usage**          | `bl sandbox template get --template-id <id>` |
+| Field | Value |
+| --- | --- |
+| **Name** | `sandbox template get` |
+| **Description** | Get Sandbox template details |
+| **Authentication** | API Key |
+| **Usage** | `bl sandbox template get --template-id <id>` |
 
 #### Flags
 
-| Flag                  | Type   | Required | Description                                                                        |
-| --------------------- | ------ | -------- | ---------------------------------------------------------------------------------- |
-| `--workspace-id <id>` | string | no       | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
-| `--template-id <id>`  | string | yes      | Sandbox template ID                                                                |
-| `--api-key <key>`     | string | no       | API key                                                                            |
-| `--base-url <url>`    | string | no       | API base URL                                                                       |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--workspace-id <id>` | string | no | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
+| `--template-id <id>` | string | yes | Sandbox template ID |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 
@@ -577,22 +577,22 @@ bl sandbox template get --template-id tpl-xxx --output json
 
 ### `bl sandbox template list`
 
-| Field              | Value                                                        |
-| ------------------ | ------------------------------------------------------------ |
-| **Name**           | `sandbox template list`                                      |
-| **Description**    | List Sandbox templates                                       |
-| **Authentication** | API Key                                                      |
-| **Usage**          | `bl sandbox template list [--limit <n>] [--cursor <cursor>]` |
+| Field | Value |
+| --- | --- |
+| **Name** | `sandbox template list` |
+| **Description** | List Sandbox templates |
+| **Authentication** | API Key |
+| **Usage** | `bl sandbox template list [--limit <n>] [--cursor <cursor>]` |
 
 #### Flags
 
-| Flag                  | Type   | Required | Description                                                                        |
-| --------------------- | ------ | -------- | ---------------------------------------------------------------------------------- |
-| `--workspace-id <id>` | string | no       | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
-| `--limit <n>`         | number | no       | Maximum results (1-100)                                                            |
-| `--cursor <cursor>`   | string | no       | Server-side pagination cursor                                                      |
-| `--api-key <key>`     | string | no       | API key                                                                            |
-| `--base-url <url>`    | string | no       | API base URL                                                                       |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--workspace-id <id>` | string | no | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
+| `--limit <n>` | number | no | Maximum results (1-100) |
+| `--cursor <cursor>` | string | no | Server-side pagination cursor |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 
@@ -615,36 +615,36 @@ bl sandbox template list --limit 100 --output json
 
 ### `bl sandbox template update`
 
-| Field              | Value                                                                              |
-| ------------------ | ---------------------------------------------------------------------------------- |
-| **Name**           | `sandbox template update`                                                          |
-| **Description**    | Update a Sandbox template                                                          |
-| **Authentication** | API Key                                                                            |
-| **Usage**          | `bl sandbox template update --template-id <id> (--body <json\|@path> \| [fields])` |
+| Field | Value |
+| --- | --- |
+| **Name** | `sandbox template update` |
+| **Description** | Update a Sandbox template |
+| **Authentication** | API Key |
+| **Usage** | `bl sandbox template update --template-id <id> (--body <json\|@path> \| [fields])` |
 
 #### Flags
 
-| Flag                                                                          | Type   | Required | Description                                                                        |
-| ----------------------------------------------------------------------------- | ------ | -------- | ---------------------------------------------------------------------------------- |
-| `--workspace-id <id>`                                                         | string | no       | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
-| `--template-id <id>`                                                          | string | yes      | Sandbox template ID                                                                |
-| `--body <json\|@path>`                                                        | string | no       | JSON request body, inline or loaded from an @file path; explicit flags override it |
-| `--image <code-interpreter\|代码解释器\|browser\|浏览器\|all-in-one\|全能型>` | string | no       | Built-in image ID or Chinese name; fills fromImage and imageName                   |
-| `--name <name>`                                                               | string | no       | Template name                                                                      |
-| `--cpu-count <cores>`                                                         | number | no       | vCPU count                                                                         |
-| `--memory-mb <mb>`                                                            | number | no       | Memory in MB                                                                       |
-| `--from-image <image>`                                                        | string | no       | Base image identifier                                                              |
-| `--image-name <name>`                                                         | string | no       | Base image display name                                                            |
-| `--env <key=value>`                                                           | array  | no       | Template environment variable; repeat for multiple values                          |
-| `--allow-out <address>`                                                       | array  | no       | Outbound allow-list entry; repeat for multiple values                              |
-| `--deny-out <address>`                                                        | array  | no       | Outbound deny-list entry; repeat for multiple values                               |
-| `--auto-pause-time <seconds>`                                                 | number | no       | Automatically pause after 300-604800 seconds                                       |
-| `--max-running-time <seconds>`                                                | number | no       | Maximum running lifetime in seconds (300-604800)                                   |
-| `--description <text>`                                                        | string | no       | Template description                                                               |
-| `--async`                                                                     | switch | no       | Return the submitted templateID/buildID immediately without polling                |
-| `--poll-interval <seconds>`                                                   | number | no       | Template build polling interval (default: 5 seconds)                               |
-| `--api-key <key>`                                                             | string | no       | API key                                                                            |
-| `--base-url <url>`                                                            | string | no       | API base URL                                                                       |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--workspace-id <id>` | string | no | Workspace ID for the default Sandbox endpoint; optional with a configured base URL |
+| `--template-id <id>` | string | yes | Sandbox template ID |
+| `--body <json\|@path>` | string | no | JSON request body, inline or loaded from an @file path; explicit flags override it |
+| `--image <code-interpreter\|代码解释器\|browser\|浏览器\|all-in-one\|全能型>` | string | no | Built-in image ID or Chinese name; fills fromImage and imageName |
+| `--name <name>` | string | no | Template name |
+| `--cpu-count <cores>` | number | no | vCPU count |
+| `--memory-mb <mb>` | number | no | Memory in MB |
+| `--from-image <image>` | string | no | Base image identifier |
+| `--image-name <name>` | string | no | Base image display name |
+| `--env <key=value>` | array | no | Template environment variable; repeat for multiple values |
+| `--allow-out <address>` | array | no | Outbound allow-list entry; repeat for multiple values |
+| `--deny-out <address>` | array | no | Outbound deny-list entry; repeat for multiple values |
+| `--auto-pause-time <seconds>` | number | no | Automatically pause after 300-604800 seconds |
+| `--max-running-time <seconds>` | number | no | Maximum running lifetime in seconds (300-604800) |
+| `--description <text>` | string | no | Template description |
+| `--async` | switch | no | Return the submitted templateID/buildID immediately without polling |
+| `--poll-interval <seconds>` | number | no | Template build polling interval (default: 5 seconds) |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Notes
 

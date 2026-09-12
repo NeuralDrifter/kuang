@@ -1,0 +1,34 @@
+# `bl agent` commands
+
+> Auto-generated from `packages/cli/src/commands.ts`. Do not edit by hand.
+> Regenerate: `pnpm --filter bailian-cli run generate:reference`.
+
+Index: [index.md](index.md)
+
+## Commands in this group
+
+| Command | Authentication | Description |
+| --- | --- | --- |
+| `bl agent` | API Key | Launch the Interactive AI Agent |
+
+## Command details
+
+### `bl agent`
+
+| Field | Value |
+| --- | --- |
+| **Name** | `agent` |
+| **Description** | Launch the Interactive AI Agent |
+| **Authentication** | API Key |
+| **Usage** | `bl agent [flags]` |
+
+#### Flags
+
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
+
+#### Examples
+
+_No examples._

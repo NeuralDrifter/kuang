@@ -1,5 +1,6 @@
 import type { AnyCommand } from "bailian-cli-core";
 import {
+  agentInteract,
   authLogin,
   authStatus,
   authLogout,
@@ -234,6 +235,7 @@ import {
 // (no side effects) so tools like generate-reference.ts can import it without
 // starting the CLI.
 export const commands: Record<string, AnyCommand> = {
+  agent: agentInteract,
   "auth login": authLogin,
   "auth status": authStatus,
   "auth logout": authLogout,
