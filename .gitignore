@@ -53,3 +53,8 @@ packages/cli/scene/**/outputs/
 
 # Local scratch / plan drafts (never commit)
 .scratch/
+
+# Agent history
+.bailian-agent-history.json
+.bailian/
+
