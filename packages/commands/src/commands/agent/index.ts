@@ -7,8 +7,9 @@ import {
 } from "bailian-cli-core";
 import { text, intro, outro, spinner, note } from "@clack/prompts";
 import pc from "picocolors";
-import { readFileSync } from "fs";
-import { execSync } from "child_process";
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from "fs";
+import { execSync, spawnSync } from "child_process";
+import path from "path";
 
 // Removed marked for now
 // Configure marked to use terminal renderer
@@ -157,13 +158,35 @@ export default defineCommand({
     note(isZH ? "输入您的消息。输入 /exit 退出。" : "Type your message. Type /exit to quit.", isZH ? "欢迎！" : "Welcome!");
 
     const vault = new RedactionVault();
+    const historyFile = path.join(process.cwd(), ".bailian-agent-history.json");
 
-    const messages: ChatMessage[] = [
-      {
-        role: "system",
-        content: isZH ? "您是一个运行在本地终端中的 AI Agent。您拥有读取文件和运行 Bash 命令的工具。请帮助用户完成他们的任务。注意：用户的敏感数据会被替换为 [REDACTED_PII_x] 的形式。您可以正常阅读和使用这些占位符，只需将占位符原样返回，系统会自动为您替换回真实数据以供执行和显示。" : "You are a helpful AI Agent running in a local terminal. You have tools to read files and run bash commands. Help the user with their tasks. NOTE: Sensitive data is replaced with placeholders like [REDACTED_PII_1]. You can read and use these placeholders normally. Just output the placeholder exactly as is, and the system will seamlessly restore the real data for execution and display.",
-      },
-    ];
+    let messages: ChatMessage[] = [];
+    if (existsSync(historyFile)) {
+      try {
+        messages = JSON.parse(readFileSync(historyFile, "utf-8"));
+        note(isZH ? "已加载之前的对话历史。输入 /clear 以开始新对话。" : "Loaded previous conversation history. Type /clear to start fresh.", "History");
+      } catch {
+        // Corrupted or empty, start fresh
+      }
+    }
+    
+    if (messages.length === 0) {
+      messages = [
+        {
+          role: "system",
+          content: isZH ? "您是一个运行在本地终端中的 AI Agent。您拥有读取文件和运行 Bash 命令的工具。请帮助用户完成他们的任务。注意：用户的敏感数据会被替换为 [REDACTED_PII_x] 的形式。您可以正常阅读和使用这些占位符，只需将占位符原样返回，系统会自动为您替换回真实数据以供执行和显示。" : "You are a helpful AI Agent running in a local terminal. You have tools to read files and run bash commands. Help the user with their tasks. NOTE: Sensitive data is replaced with placeholders like [REDACTED_PII_1]. You can read and use these placeholders normally. Just output the placeholder exactly as is, and the system will seamlessly restore the real data for execution and display.",
+        },
+      ];
+    }
+
+    // Helper to restart
+    const doRestart = () => {
+       writeFileSync(historyFile, JSON.stringify(messages, null, 2), "utf-8");
+       note(isZH ? "正在重启 Agent..." : "Restarting Agent...", "Restart");
+       // Re-spawn the exact same process
+       const child = spawnSync(process.argv[0], process.argv.slice(1), { stdio: "inherit" });
+       process.exit(child.status ?? 0);
+    };
 
     while (true) {
       const input = await text({
@@ -172,16 +195,38 @@ export default defineCommand({
       });
 
       if (input === "/exit" || typeof input === "symbol") {
+        writeFileSync(historyFile, JSON.stringify(messages, null, 2), "utf-8");
         outro(isZH ? "再见！" : "Goodbye!");
         break;
       }
       const inputStr = String(input).trim();
 
+      if (inputStr === "/restart") {
+        doRestart();
+        continue;
+      }
+
+      if (inputStr === "/clear") {
+        if (existsSync(historyFile)) {
+           unlinkSync(historyFile);
+        }
+        messages = [
+          {
+            role: "system",
+            content: isZH ? "您是一个运行在本地终端中的 AI Agent。您拥有读取文件和运行 Bash 命令的工具。请帮助用户完成他们的任务。注意：用户的敏感数据会被替换为 [REDACTED_PII_x] 的形式。您可以正常阅读和使用这些占位符，只需将占位符原样返回，系统会自动为您替换回真实数据以供执行和显示。" : "You are a helpful AI Agent running in a local terminal. You have tools to read files and run bash commands. Help the user with their tasks. NOTE: Sensitive data is replaced with placeholders like [REDACTED_PII_1]. You can read and use these placeholders normally. Just output the placeholder exactly as is, and the system will seamlessly restore the real data for execution and display.",
+          },
+        ];
+        console.clear();
+        intro(pc.bgBlue(pc.white(isZH ? " Bailian CLI : 交互式 Agent " : " Bailian CLI : Interactive Agent ")));
+        note(isZH ? "历史记录已清除。" : "History cleared.", "History");
+        continue;
+      }
+
       if (inputStr.startsWith("/apikey ")) {
         const newKey = inputStr.substring(8).trim();
         try {
            execSync(`npx tsx packages/cli/src/main.ts config set --key api_key --value "${newKey}"`, { stdio: 'ignore' });
-           note(isZH ? "API Key 已保存。请重启 Agent (/exit) 以生效。" : "API Key saved. Please restart the agent (/exit) for changes to take effect.", "Success");
+           doRestart();
         } catch (e) {
            note(isZH ? "保存 API Key 失败。" : "Failed to save API Key.", "Error");
         }
@@ -192,7 +237,7 @@ export default defineCommand({
         const newUrl = inputStr.substring(5).trim();
         try {
            execSync(`npx tsx packages/cli/src/main.ts config set --key base_url --value "${newUrl}"`, { stdio: 'ignore' });
-           note(isZH ? "Base URL 已保存。请重启 Agent (/exit) 以生效。" : "Base URL saved. Please restart the agent (/exit) for changes to take effect.", "Success");
+           doRestart();
         } catch (e) {
            note(isZH ? "保存 Base URL 失败。" : "Failed to save Base URL.", "Error");
         }
