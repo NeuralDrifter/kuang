@@ -175,8 +175,31 @@ export default defineCommand({
         outro(isZH ? "再见！" : "Goodbye!");
         break;
       }
+      const inputStr = String(input).trim();
 
-      messages.push({ role: "user", content: vault.sanitize(String(input)) });
+      if (inputStr.startsWith("/apikey ")) {
+        const newKey = inputStr.substring(8).trim();
+        try {
+           execSync(`npx tsx packages/cli/src/main.ts config set --key api_key --value "${newKey}"`, { stdio: 'ignore' });
+           note(isZH ? "API Key 已保存。请重启 Agent (/exit) 以生效。" : "API Key saved. Please restart the agent (/exit) for changes to take effect.", "Success");
+        } catch (e) {
+           note(isZH ? "保存 API Key 失败。" : "Failed to save API Key.", "Error");
+        }
+        continue;
+      }
+
+      if (inputStr.startsWith("/url ")) {
+        const newUrl = inputStr.substring(5).trim();
+        try {
+           execSync(`npx tsx packages/cli/src/main.ts config set --key base_url --value "${newUrl}"`, { stdio: 'ignore' });
+           note(isZH ? "Base URL 已保存。请重启 Agent (/exit) 以生效。" : "Base URL saved. Please restart the agent (/exit) for changes to take effect.", "Success");
+        } catch (e) {
+           note(isZH ? "保存 Base URL 失败。" : "Failed to save Base URL.", "Error");
+        }
+        continue;
+      }
+
+      messages.push({ role: "user", content: vault.sanitize(inputStr) });
 
       let requireAnotherTurn = true;
 
