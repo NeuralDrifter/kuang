@@ -33,6 +33,12 @@ class RedactionVault {
     /\b[STFGMstfgm]\d{7}[a-zA-Z]\b/g,
     // Singapore Mobile Phone Numbers (8 digits starting with 8 or 9, optional +65)
     /\b(?:\+?65[ -]?)?[89]\d{7}\b/g,
+    // Canadian Social Insurance Number (SIN) (9 digits, e.g., 123-456-789)
+    /\b\d{3}[ -]?\d{3}[ -]?\d{3}\b/g,
+    // Canadian Passport Number (2 letters + 6 digits)
+    /\b[A-Za-z]{2}\d{6}\b/g,
+    // North American (US/Canada) Phone Numbers
+    /\b(?:\+?1[-. ]?)?\(?[2-9]\d{2}\)?[-. ]?[2-9]\d{2}[-. ]?\d{4}\b/g,
   ];
 
   sanitize(text: string): string {
