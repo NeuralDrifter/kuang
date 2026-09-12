@@ -21,10 +21,14 @@ class RedactionVault {
   private rules = [
     // Typical API Keys (sk-[letters/numbers])
     /(sk-[a-zA-Z0-9]{20,})/g,
-    // SSN
+    // US SSN
     /\b\d{3}-\d{2}-\d{4}\b/g,
     // Credit Cards (simplified 13-16 digits)
     /\b(?:\d[ -]*?){13,16}\b/g,
+    // Chinese Resident Identity Card (18 digits)
+    /\b[1-9]\d{5}(?:18|19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx]\b/g,
+    // Chinese Mobile Phone Number (11 digits starting with 13-19)
+    /\b1[3-9]\d{9}\b/g,
   ];
 
   sanitize(text: string): string {
