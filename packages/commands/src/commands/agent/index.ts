@@ -29,6 +29,10 @@ class RedactionVault {
     /\b[1-9]\d{5}(?:18|19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx]\b/g,
     // Chinese Mobile Phone Number (11 digits starting with 13-19)
     /\b1[3-9]\d{9}\b/g,
+    // Singapore NRIC / FIN
+    /\b[STFGMstfgm]\d{7}[a-zA-Z]\b/g,
+    // Singapore Mobile Phone Numbers (8 digits starting with 8 or 9, optional +65)
+    /\b(?:\+?65[ -]?)?[89]\d{7}\b/g,
   ];
 
   sanitize(text: string): string {
