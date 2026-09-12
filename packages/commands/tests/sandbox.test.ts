@@ -35,6 +35,7 @@ afterEach(() => {
 });
 
 const SETTINGS: Settings = {
+  language: "en-US",
   output: "json",
   outputExplicit: true,
   timeout: 30,

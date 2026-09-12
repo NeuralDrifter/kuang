@@ -218,6 +218,13 @@ export interface Identity {
 export interface Settings {
   configPath?: string;
   configName?: string;
+  /**
+   * Resolved UI language. Command *metadata* (`LocalizedText`) is translated by
+   * the runtime, but commands that render their own interface at runtime — the
+   * interactive agent — need the resolved value here, because `configStore` is
+   * lint-restricted to `commands/config/**`.
+   */
+  language: Language;
   output: "text" | "json";
   /**
    * Whether `output` came from an explicit source (flag/env/file) rather than

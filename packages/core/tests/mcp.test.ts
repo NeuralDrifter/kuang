@@ -20,6 +20,7 @@ function testDeps(overrides?: Partial<Settings>): { identity: Identity; settings
       clientName: "bailian-cli",
     },
     settings: {
+      language: "en-US",
       output: "json",
       outputExplicit: true,
       timeout: 5,

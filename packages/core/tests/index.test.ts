@@ -34,6 +34,7 @@ function testDeps(identity: Partial<Identity> = {}): {
       ...identity,
     },
     settings: {
+      language: "en-US",
       output: "json",
       outputExplicit: true,
       timeout: 30,

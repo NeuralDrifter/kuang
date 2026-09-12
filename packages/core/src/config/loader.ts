@@ -1,5 +1,11 @@
 import { readFileSync, writeFileSync, renameSync, existsSync } from "fs";
-import { CONFIG_FILE_KEYS, parseConfigFile, type ConfigFile, type Settings } from "./schema.ts";
+import {
+  CONFIG_FILE_KEYS,
+  DEFAULT_LANGUAGE,
+  parseConfigFile,
+  type ConfigFile,
+  type Settings,
+} from "./schema.ts";
 import { ensureConfigDir, getConfigPath } from "./paths.ts";
 import { detectOutputFormat } from "../output/formatter.ts";
 import { BailianError } from "../errors/base.ts";
@@ -268,6 +274,7 @@ export function buildSettings(s: ResolutionSources): Settings {
   return {
     configPath: s.configPath ?? getConfigPath(),
     configName: s.configName,
+    language: file.language ?? DEFAULT_LANGUAGE,
     output: detectOutputFormat(flags.output || env.DASHSCOPE_OUTPUT || file.output),
     outputExplicit: Boolean(flags.output || env.DASHSCOPE_OUTPUT || file.output),
     outputDir: file.output_dir || undefined,

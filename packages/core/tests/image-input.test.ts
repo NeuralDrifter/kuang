@@ -25,6 +25,7 @@ function makeImage(extension = ".png", content = Buffer.from([1, 2, 3, 4])): str
 function makeSettings(configName?: string): Settings {
   return {
     configName,
+    language: "en-US",
     output: "json",
     outputExplicit: false,
     timeout: 30,
