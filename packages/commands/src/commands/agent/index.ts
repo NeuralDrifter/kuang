@@ -39,6 +39,14 @@ class RedactionVault {
     /\b[A-Za-z]{2}\d{6}\b/g,
     // North American (US/Canada) Phone Numbers
     /\b(?:\+?1[-. ]?)?\(?[2-9]\d{2}\)?[-. ]?[2-9]\d{2}[-. ]?\d{4}\b/g,
+    // European IBAN (International Bank Account Number)
+    /\b[A-Za-z]{2}\d{2}[ -]?[A-Za-z0-9]{4,30}\b/g,
+    // UK National Insurance Number (NINO)
+    /\b[A-Za-z]{2}[ -]?\d{2}[ -]?\d{2}[ -]?\d{2}[ -]?[A-Za-z]\b/g,
+    // French Social Security Number (NIR)
+    /\b[12][ -]?\d{2}[ -]?\d{2}[ -]?\d{2}[ -]?\d{3}[ -]?\d{3}[ -]?\d{2}\b/g,
+    // EU VAT Number
+    /\b(AT|BE|BG|CY|CZ|DE|DK|EE|EL|ES|FI|FR|HR|HU|IE|IT|LT|LU|LV|MT|NL|PL|PT|RO|SE|SI|SK)[ -]?[A-Z0-9]{2,13}\b/gi,
   ];
 
   sanitize(text: string): string {
