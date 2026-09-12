@@ -13,6 +13,44 @@ import { execSync } from "child_process";
 // Removed marked for now
 // Configure marked to use terminal renderer
 
+class RedactionVault {
+  private secretToPlaceholder = new Map<string, string>();
+  private placeholderToSecret = new Map<string, string>();
+  private counter = 1;
+
+  private rules = [
+    // Typical API Keys (sk-[letters/numbers])
+    /(sk-[a-zA-Z0-9]{20,})/g,
+    // SSN
+    /\b\d{3}-\d{2}-\d{4}\b/g,
+    // Credit Cards (simplified 13-16 digits)
+    /\b(?:\d[ -]*?){13,16}\b/g,
+  ];
+
+  sanitize(text: string): string {
+    let sanitized = text;
+    for (const rule of this.rules) {
+      sanitized = sanitized.replace(rule, (match) => {
+        if (!this.secretToPlaceholder.has(match)) {
+          const ph = `[REDACTED_PII_${this.counter++}]`;
+          this.secretToPlaceholder.set(match, ph);
+          this.placeholderToSecret.set(ph, match);
+        }
+        return this.secretToPlaceholder.get(match)!;
+      });
+    }
+    return sanitized;
+  }
+
+  restore(text: string): string {
+    let restored = text;
+    for (const [ph, secret] of this.placeholderToSecret.entries()) {
+      restored = restored.split(ph).join(secret);
+    }
+    return restored;
+  }
+}
+
 // We'll define two simple bash tools for local system access
 const localTools = [
   {
@@ -59,6 +97,8 @@ export default defineCommand({
 
     note(isZH ? "输入您的消息。输入 /exit 退出。" : "Type your message. Type /exit to quit.", isZH ? "欢迎！" : "Welcome!");
 
+    const vault = new RedactionVault();
+
     const messages: ChatMessage[] = [
       {
         role: "system",
@@ -77,7 +117,7 @@ export default defineCommand({
         break;
       }
 
-      messages.push({ role: "user", content: String(input) });
+      messages.push({ role: "user", content: vault.sanitize(String(input)) });
 
       let requireAnotherTurn = true;
 
@@ -150,7 +190,8 @@ export default defineCommand({
 
           for (const tc of calls) {
             const fnName = tc.function.name;
-            const fnArgs = JSON.parse(tc.function.arguments || "{}");
+            const restoredArgsStr = vault.restore(tc.function.arguments || "{}");
+            const fnArgs = JSON.parse(restoredArgsStr);
 
             note(pc.dim(`Tool Call: ${fnName}(${JSON.stringify(fnArgs)})`), "Executing Tool");
 
@@ -167,9 +208,10 @@ export default defineCommand({
               result = `Error: ${e.message}`;
             }
 
-            const preview = result.length > 100 ? result.substring(0, 100) + "..." : result;
+            const sanitizedResult = vault.sanitize(result);
+            const preview = sanitizedResult.length > 100 ? sanitizedResult.substring(0, 100) + "..." : sanitizedResult;
             note(pc.dim(`Result: ${preview}`), "Tool Result");
-            messages.push({ role: "tool", content: result, tool_call_id: tc.id } as any);
+            messages.push({ role: "tool", content: sanitizedResult, tool_call_id: tc.id } as any);
           }
 
           // Loop again to let the model see the tool result
