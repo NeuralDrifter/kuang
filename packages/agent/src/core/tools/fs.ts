@@ -60,7 +60,15 @@ const REGEX_SPECIAL = /[.*+?^${}()|[\]\\]/;
 //  - a single star matches anything within one path segment
 //  - a question mark matches exactly one character within one path segment
 //  - every other regex metacharacter is escaped
-function globToRegExp(pattern: string): RegExp {
+function globToRegExp(rawPattern: string): RegExp {
+  // Collapse runs of consecutive `**/` segments to a single `**/` first. Each
+  // one independently translates to an optional `(?:.*/)?` group; n of those
+  // in a row backtrack catastrophically against a non-matching path (measured
+  // ~x8 slower per added `**/`; 12 in a row took over 5s on an 18-segment
+  // path), and `glob` is tier `auto` — a model-supplied `**/**/**/...` would
+  // hang the agent with no approval prompt to interrupt it. Collapsing first
+  // means there is only ever one `(?:.*/)?` per logical "any depth" gap.
+  const pattern = rawPattern.replace(/(\*\*\/)+/g, "**/");
   let source = "^";
   for (let i = 0; i < pattern.length; ) {
     if (pattern.startsWith("**/", i)) {
@@ -314,7 +322,14 @@ function grepTool(root: string): Tool {
           continue;
         }
         if (fileInfo.size > MAX_GREP_FILE_BYTES) continue;
-        if (await isProbablyBinary(abs)) continue;
+
+        let binary: boolean;
+        try {
+          binary = await isProbablyBinary(abs);
+        } catch {
+          continue;
+        }
+        if (binary) continue;
 
         let text: string;
         try {

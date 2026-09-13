@@ -105,12 +105,27 @@ test("glob matches the patterns a model actually writes", async () => {
 test("grep skips binary and oversized files and caps its output", async () => {
   const root = sandbox();
   writeFileSync(join(root, "bin.dat"), Buffer.from([0x00, 0x61, 0x00, 0x62]));
+  // Over 1 MB: skipped by size before it is ever read.
   writeFileSync(join(root, "big.txt"), "a\n".repeat(600_000), "utf-8");
+  // Small but with more matches than the cap, so the cap is actually exercised.
+  writeFileSync(join(root, "many.txt"), "a\n".repeat(300), "utf-8");
 
   const out = await tool(root, "grep").run({ pattern: "a" });
+  const lines = out.split("\n");
+
   expect(out).not.toContain("bin.dat");
   expect(out).not.toContain("big.txt");
-  expect(out.split("\n").length).toBeLessThanOrEqual(201);
+  expect(out).toContain("many.txt");
+  expect(lines).toHaveLength(201);
+  expect(lines.at(-1)).toMatch(/truncated/i);
+});
+
+test("a pathological glob pattern cannot hang the agent", async () => {
+  const root = sandbox();
+  const pattern = "**/".repeat(14) + "*.ts";
+  const started = Date.now();
+  await tool(root, "glob").run({ pattern });
+  expect(Date.now() - started).toBeLessThan(1000);
 });
 
 test("read and search tools are auto-approved; writes ask", () => {
