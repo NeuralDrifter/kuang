@@ -1,206 +1,176 @@
 <div align="center">
 
-<img src="https://img.alicdn.com/imgextra/i1/O1CN01kGgO3z1N30OINgUoG_!!6000000001513-2-tps-1915-821.png" alt="Aliyun Model Studio CLI" />
+# Kuang 匡
 
-**The official command-line interface for Aliyun Model Studio (DashScope) AI Platform**
+**An interactive coding and media agent for Aliyun Model Studio**
 
-[![npm version](https://img.shields.io/npm/v/bailian-cli?color=0969da&label=npm)](https://www.npmjs.com/package/bailian-cli)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.17-brightgreen)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)](https://www.typescriptlang.org)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
-[Aliyun Model Studio CLI Site](https://bailian.console.aliyun.com/cli?source_channel=cli_github&) · [中文文档](https://github.com/modelstudioai/cli/blob/main/README.zh.md) · [API Documentation](https://help.aliyun.com/zh/model-studio/) · [Get API Key](https://bailian.console.aliyun.com/cn-beijing/?source_channel=key_github&tab=app#/api-key)
-
----
-
-_Chat with Qwen, generate and edit images and videos, understand images, synthesize_
-_and recognize speech, call apps, manage memory, retrieve knowledge, search the web —_
-_every AI capability, one command away._
-
-_Built for AI Agents. Every command works as a structured tool call._
+[中文](README.zh.md) · [What diverged from upstream](FORK.md)
 
 </div>
 
-> **Kuang 匡** is an independent fork of [bailian-cli](https://github.com/modelstudioai/cli).
-> Not affiliated with, endorsed by, or supported by Alibaba. See [FORK.md](FORK.md).
+> **Kuang 匡 is an independent fork of [bailian-cli](https://github.com/modelstudioai/cli)**, the
+> Aliyun Model Studio CLI. It is **not** official, and is not affiliated with,
+> endorsed by, or supported by Alibaba. For the official tool, go upstream.
+>
+> 匡 (kuāng) — to correct, to rectify, to assist. 匡正, 匡扶.
 
-## Features
+---
 
-- **Model generation** — Full-modality generation across text, image, video, and speech, with editing and reference-based generation
-- **Asset understanding** — Parse and ask questions about images, documents, audio, and long videos
-- **App orchestration** — Call Managed Agents, agents, and workflows published on Aliyun Model Studio, wired to knowledge bases, memory, web search, and MCP tools
-- **Training & deployment** — Validate and upload datasets, fine-tune models, deploy dedicated models as endpoints
-- **Account operations** — Login, UI-based configuration, model marketplace, usage and quota, rate-limit increases, team seat management
-- **Plan onboarding** — Connect subscription plans such as Token Plan to the CLI and common coding agents in one step
+## What this is
 
-> **Note:** App orchestration, training & deployment, account operations, and plan onboarding are currently available only to China site (aliyun.com) account holders and are not yet supported for international / global site accounts.
+The upstream CLI ships **skills for other people's agents** — it detects Claude
+Code, Cline, Warp, Zed and friends, and installs instruction packs into their
+directories. It has 228 commands covering text, image, video, speech, knowledge
+bases, fine-tuning and deployment. What it never had was an agent of its own.
 
-## Showcase 1: A Cinematic Short Film from One Sentence
+Kuang is that missing piece: a terminal agent, in the class of Claude Code or
+Gemini CLI, that runs **on top of** those 228 commands instead of beside them.
+The long-term goal is one interface where you can write code, generate an image,
+cut a video and ship a fine-tune without leaving the prompt.
 
-<p align="center">
-  <a href="https://cloud.video.taobao.com/vod/dS2F4huqbw5Nfe5L3wwb3grz2q2DNYD3retq8dU-iHo.mp4">
-    <img src="https://img.alicdn.com/imgextra/i1/O1CN01Q5052k232Hd36NodG_!!6000000007197-0-tps-2940-1656.jpg" alt="Click to play the demo video" width="720" />
-  </a>
-</p>
+Everything the upstream CLI does still works. Kuang adds a host for it.
 
-<p align="center"><i>👆 Click the cover to play the full 2-minute demo</i></p>
+## Status
 
-A complete **2-minute, 16:9 cinematic short film** — produced end-to-end from a single natural-language sentence, with **zero manual editing**. This showcase demonstrates how an AI Agent can compose a multi-step creative pipeline by orchestrating three primitives:
+Early. The agent core is built, tested and runs against the live API. The
+platform tool surface — the part that makes it generate media — is next.
 
-- **[Qwen Code](https://github.com/QwenLM/qwen-code)** — the agentic coding model that interprets the user's intent and drives the workflow
-- **[Aliyun Model Studio CLI](https://github.com/modelstudioai/cli/)** — invokes **HappyHorse 1.1**, Aliyun Model Studio's text-/image-/reference-to-video generation model
-- **[spark-video Skill](https://github.com/JohnKeating1997/spark-video)** — handles scene decomposition, storyboarding, shot continuity, and final stitching
+**Working today**
 
-### The single prompt
+- Interactive agent (`kuang agent`) — streaming replies, token accounting, clean exit
+- Six local tools: `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `shell`
+- Three-tier approvals: reads run silently, writes and shell ask first, with a
+  unified diff shown **before** you approve, not after
+- "Always allow" stores a _pattern_, not the literal command, and fails closed on
+  anything it cannot safely generalise
+- Shell with real interpreter selection (pwsh / powershell / bash / python /
+  python3), probed at startup — no more assuming `bash` on Windows
+- Every path resolved against the project root and refused if it escapes
+- 77 tests across 10 files, headless — the agent core is tested with no terminal
 
-> _"Generate a roughly 2-minute video in Japanese cinematic style — a sweet, innocent first-love story about a high-school girl. The plot should be heart-fluttering enough to make viewers want to fall in love. Aspect ratio: 16:9."_
+**Not yet**
 
-## Showcase 2: A Short-Film Director Managed Agent from One Sentence
+- The 228 `bl` commands as agent tools (image, video, speech, knowledge, fine-tune)
+- Session persistence and `--resume`
+- Ink-based TUI — the current renderer is plain text
+- Full bilingual coverage — UI labels are localized, payload strings are not yet
+- Skills as a knowledge layer
+- PII redaction (the inherited prototype's version was removed; see FORK.md)
 
-<p align="center">
-  <a href="https://cloud.video.taobao.com/vod/2v0GYLbJSQb2saj4iopTJDW3iRIHsintYlK-wTKbhqE.mp4">
-    <img src="https://img.alicdn.com/imgextra/i4/6000000001674/O1CN01xhzixhxltbH3LxWu_!!6000000001674-0-tbvideo.jpg" alt="Click to play the demo video" width="720" />
-  </a>
-</p>
+## Install
 
-<p align="center"><i>👆 Click the cover to play the full demo</i></p>
-
-One sentence builds a reusable cloud-side short-film director for storyboarding, storyboard image generation, and video creation:
-
-- **[Qwen Code](https://github.com/QwenLM/qwen-code)** — understands the requirement and generates the agent configuration
-- **[Aliyun Model Studio CLI](https://github.com/modelstudioai/cli/)** — validates the configuration, previews the changes, and completes the deployment
-- **[Managed Agent](https://bailian.console.aliyun.com/cn-beijing/?tab=managed-agents#/managed-agents/quick-start)** — runs the director role along with its skills and tools in the cloud
-
-### The single prompt
-
-> _"Build me a Managed Agent app that can produce short films — a director expert that generates videos and can also design the matching storyboards."_
-
-## Installation
-
-**Agent install (recommended)**
-
-Send the following to your Agent — it will detect your environment, then install and verify the CLI for you:
-
-```text
-Please read https://bailian.aliyun.com/cli/install.md and install the Aliyun Model Studio CLI for me
-```
-
-**Install with NPM**
+Not published to any registry. Build from source:
 
 ```bash
-npm install -g bailian-cli
-bl skill init
+git clone https://github.com/NeuralDrifter/kuang.git
+cd kuang
+pnpm install
 ```
 
-> Requires Node.js >= 18.17.
-
-**Install on macOS/Linux**
+Run it directly:
 
 ```bash
-curl -fsSL https://bailian.aliyun.com/cli/install.sh | bash
+cd packages/cli && npx tsx src/main.ts agent
 ```
 
-> No Node.js required. The installer automatically installs Bailian Skills.
+Or link a real `kuang` binary onto your PATH:
 
-**Install on Windows**
-
-```powershell
-irm https://bailian.aliyun.com/cli/install.ps1 | iex
+```bash
+pnpm -F bailian-cli build
+cd packages/cli && npm link
+kuang agent
 ```
 
-> No Node.js required. The installer automatically installs Bailian Skills.
-
-## Quick Start
-
-Once installed, just describe your task to your AI Agent — no need to assemble commands by hand.
-
-| Scenario                 | What to say to your Agent                                                         |
-| ------------------------ | --------------------------------------------------------------------------------- |
-| Managed Agent            | "Create a Managed Agent that can generate short-film storyboards and videos."     |
-| Image & video generation | "Generate an image of a cat in a spacesuit on Mars, then turn it into a video."   |
-| Speech recognition       | "Transcribe this audio; if proper nouns are wrong, add hot words and try again."  |
-| Usage & quota            | "Show my recent model usage, free-tier quota, and rate limits."                   |
-| Model selection          | "Recommend a model for image understanding and customer support."                 |
-| About Bailian CLI        | "Tell me what Bailian CLI can do for me, and suggest how to use it for my needs." |
-
-> More examples and scenarios: [Aliyun Model Studio CLI Site](https://bailian.console.aliyun.com/cli?source_channel=cli_github&)
+> Requires Node.js >= 18.17. The binary is `kuang`, **not** `bl` — that name
+> belongs to the upstream CLI and the two would collide on your PATH.
 
 ## Authentication
 
-### API Key
-
-Required for most commands. Get your key from the [DashScope Console](https://bailian.console.aliyun.com/cn-beijing/?source_channel=key_github&tab=app#/api-key).
+Inherited from upstream and unchanged. An API key is the simplest path:
 
 ```bash
-bl auth login --api-key sk-xxxxx
+kuang auth login
 ```
 
-Get or copy your Token Plan API key from the [Token Plan subscription overview](https://bailian.console.aliyun.com/cn-beijing?tab=plan#/efm/subscription/overview).
+Or set it directly:
 
 ```bash
-bl auth login --config token-plan --api-key sk-sp-xxxxx
+kuang config set --key api_key --value sk-...
 ```
 
-### Console Login (OAuth)
+Console OAuth (`kuang auth login --console`) and Alibaba Cloud AK/SK
+(`kuang auth login --open-api`) also work. Config lives at
+`~/.bailian/config.json`.
 
-Required for console capability commands (model list, app list, MCP list, workspace, usage queries, rate-limit increases, direct console calls). Opens the Bailian console in your browser to sign in.
+## Using the agent
+
+```
+$ kuang agent
+> what does the approval gate do when a command chains with &&?
+```
+
+Reads, globs and greps run without interrupting you. Writes, edits and shell
+commands stop and ask:
+
+```
+Approval required: shell
+  bash: pnpm test --run (in /home/you/project)
+[y]es / [n]o / [a]lways:
+```
+
+Answer `a` and it remembers the _pattern_ `pnpm test*`, so `pnpm test --watch`
+won't ask again — but `rm -rf /` still will. Type `/exit` or press Ctrl+D to leave.
+
+## The inherited CLI
+
+All 228 upstream commands remain available and unmodified:
 
 ```bash
-bl auth login --console
+kuang text chat --message "hello"
+kuang image generate --prompt "a cat in a spacesuit on Mars"
+kuang video generate --prompt "..." --download
+kuang knowledge retrieve --index-id ... --query "..."
+kuang usage
 ```
 
-### Alibaba Cloud OpenAPI AK/SK
+`kuang <command> --help` for any of them. Upstream's own documentation applies —
+only the binary name changed.
 
-Token Plan seat and member management requires an Alibaba Cloud AccessKey. Get yours from the [RAM Console](https://ram.console.aliyun.com/manage/ak).
+## Security
 
-> Recommended: create a RAM sub-account with minimum privileges instead of using the root account's AK/SK.
+The agent runs commands a language model proposed, on your machine. Two known
+limitations, both deliberate and both tracked:
 
-```bash
-bl auth login --open-api --access-key-id LTAI5t... --access-key-secret ...
-```
+1. **Approval patterns generalise by command prefix.** A rule derived from
+   `rm -f build/tmp.txt` also permits `rm -f -r /`. Contained today only because
+   approvals are in-memory per session and never persisted. A denylist of
+   never-generalisable commands must land _with_ persistence, not after it.
+2. **Symlinks are followed.** `read_file` runs without approval and does not call
+   `realpath`, so a symlink inside a repository can point outside it.
 
-## Configuration
-
-```bash
-# View current config
-bl config show
-
-# List all config profiles
-bl config list
-
-# Switch config profile
-bl config use --name token-plan
-
-# Switch the CLI interface to Chinese
-bl config set --key language --value zh-CN
-```
-
-Config file location: `~/.bailian/config.json`
-
-## Update
-
-```bash
-bl update
-```
-
-Upgrades the CLI to the latest version and refreshes the installed Agent Skills. Release notes for every version live in [CHANGELOG.md](https://github.com/modelstudioai/cli/blob/main/CHANGELOG.md).
+Do not run this against a repository you do not trust.
 
 ## Contributing
 
-Bug reports, feature requests, and PRs are welcome. See [CONTRIBUTING.md](https://github.com/modelstudioai/cli/blob/main/CONTRIBUTING.md) for developer setup, repo layout, and the workflow for adding or changing commands.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Architecture and conventions are in
+[AGENTS.md](AGENTS.md); the agent package layers as `core/` (pure, no I/O) and
+`ui/` (renderers), and `core/` must never import `ui/`.
 
-Scan the QR code to join the Aliyun Model Studio CLI DingTalk user group for usage help, troubleshooting, bug reports, and tips from other users.
+```bash
+npx vp check --fix                        # lint + types
+cd packages/agent && npx vp test --run    # agent tests
+```
 
-<img src="https://img.alicdn.com/imgextra/i3/O1CN015uuhYGb6j0L12xJZ_!!6000000006304-2-tps-516-485.png" alt="Aliyun Model Studio CLI DingTalk user group" width="240" />
+## License
 
-## Links
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
-| Resource                     | URL                                                                                       |
-| :--------------------------- | :---------------------------------------------------------------------------------------- |
-| Aliyun Model Studio CLI Site | https://bailian.console.aliyun.com/cli?source_channel=cli_github&                         |
-| DashScope API Docs           | https://help.aliyun.com/zh/model-studio/                                                  |
-| Qwen Model List              | https://help.aliyun.com/zh/model-studio/getting-started/models                            |
-| Aliyun Model Studio Console  | https://bailian.console.aliyun.com/?source_channel=cli_github                             |
-| Get API Key                  | https://bailian.console.aliyun.com/cn-beijing/?source_channel=key_github&tab=app#/api-key |
-| Get Token Plan API Key       | https://bailian.console.aliyun.com/cn-beijing?tab=plan#/efm/subscription/overview         |
-| Get AccessKey                | https://ram.console.aliyun.com/manage/ak                                                  |
+Original work © 2026 Aliyun Model Studio (DashScope) AI Platform.
+Modifications © 2026 Michael P. Burgus.
+
+"Aliyun", "Bailian", "Model Studio" and "DashScope" are trademarks of their
+respective owners and are used here descriptively only.
