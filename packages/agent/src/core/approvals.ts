@@ -8,21 +8,23 @@
  * permissions on the Bailian platform, and reusing the word would confuse two
  * unrelated systems.
  *
- * "Always allow" persists a *pattern*, never the literal invocation — approving
- * `pnpm test --run` once should not re-prompt for `pnpm test --watch`. Patterns
- * are anchored at the start so an approved prefix can never be smuggled into
- * the middle of a longer command.
+ * One derivation function does double duty. `patternFor` turns a call into a
+ * rule, and `isAllowed` accepts a call only when its own derived pattern equals
+ * a stored rule. So a call `patternFor` refuses to generalise — a command that
+ * chains, a path that normalises outside the project, a root-level path — can
+ * never be auto-approved either. Fail-closed is the default path, not a
+ * special case, and there is exactly one function to audit.
  */
 
 export type ApprovalDecision = "allow" | "allow_always" | "deny";
 
 export interface ApprovalRule {
   tool: string;
-  /** Glob over the tool's significant argument. Absent means "any arguments". */
+  /** Derived by `patternFor`. A rule without one authorises nothing. */
   argPattern?: string;
 }
 
-/** The argument each tool is gated on. */
+/** The argument each tool is gated on. A tool absent here is never auto-approved. */
 const GATED_ARG: Record<string, string> = {
   shell: "command",
   write_file: "path",
@@ -31,41 +33,86 @@ const GATED_ARG: Record<string, string> = {
 };
 
 /**
+ * Characters that let one shell command become two. A command containing any
+ * of them is never generalised into a rule, so an approved prefix cannot be
+ * used as a launch pad: `pnpm test` approved must not permit
+ * `pnpm test; rm -rf ~`.
+ */
+const SHELL_CHAINING = /[;&|`$(){}<>\n\r]/;
+
+/**
  * Anchored glob match. `*` matches within a path segment, `**` across
- * segments. Anchored at both ends so `pnpm test*` cannot match
- * `rm -rf / && pnpm test`.
+ * segments. Exported for Task 8's `glob` tool; approvals themselves compare
+ * derived patterns for equality rather than globbing.
  */
 export function matchesPattern(pattern: string, value: string): boolean {
-  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-  const source =
-    // Single pass, so `**` is consumed before `*` can match its first star.
-    "^" + escaped.replace(/\*\*|\*/g, (m) => (m === "**" ? ".*" : "[^/]*")) + "$";
+  const escaped = pattern.replace(/[.+^${}()|[\]\\?]/g, "\\$&");
+  // Single pass, so `**` is consumed before `*` can match its first star.
+  const source = "^" + escaped.replace(/\*\*|\*/g, (m) => (m === "**" ? ".*" : "[^/]*")) + "$";
   return new RegExp(source).test(value);
 }
 
-/** The value an "always allow" rule for this call should be built from. */
+/**
+ * Normalise a path to forward slashes and resolve `.` / `..` segments.
+ * Returns undefined for an absolute path, or one that climbs out of the
+ * project — neither can be expressed as a project-relative rule.
+ */
+function normalizePath(raw: string): string | undefined {
+  const slashed = raw.replaceAll("\\", "/");
+  if (slashed.startsWith("/") || /^[A-Za-z]:/.test(slashed)) return undefined;
+
+  const out: string[] = [];
+  for (const segment of slashed.split("/")) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      if (out.length === 0) return undefined;
+      out.pop();
+      continue;
+    }
+    out.push(segment);
+  }
+  return out.length === 0 ? undefined : out.join("/");
+}
+
+/** The value a rule for this call would be built from. */
 function gatedValue(tool: string, args: Record<string, unknown>): string | undefined {
   const key = GATED_ARG[tool];
-  if (!key) return undefined;
+  if (key === undefined) return undefined;
   const raw = args[key];
   return typeof raw === "string" ? raw : undefined;
 }
 
 /**
- * Derive the pattern "always allow" should store.
- *  - shell: the first two words plus `*` — `pnpm test --run` -> `pnpm test*`
- *  - paths: the containing directory plus `**`
+ * Derive the rule this call generalises to, or undefined when it must never be
+ * generalised. Used both to store a rule and to test one, so the two can never
+ * disagree.
+ *
+ *  - shell: the first two words plus `*` — `pnpm test --run` -> `pnpm test*`;
+ *    undefined when the command could chain.
+ *  - paths: the containing directory plus `**`, after normalisation;
+ *    undefined at the project root, so no rule can ever mean "any path".
  */
 export function patternFor(tool: string, args: Record<string, unknown>): string | undefined {
   const value = gatedValue(tool, args);
   if (value === undefined) return undefined;
 
   if (tool === "shell") {
-    const words = value.trim().split(/\s+/).slice(0, 2);
-    return words.join(" ") + "*";
+    if (SHELL_CHAINING.test(value)) return undefined;
+    const parts = value.trim().split(/\s+/).filter(Boolean);
+    const command = [];
+    for (const part of parts) {
+      if (part.startsWith("-")) break;
+      command.push(part);
+    }
+    if (command.length === 0) return undefined;
+    return command.join(" ") + "*";
   }
-  const dir = value.replaceAll("\\", "/").split("/").slice(0, -1).join("/");
-  return dir === "" ? "**" : dir + "/**";
+
+  const normalized = normalizePath(value);
+  if (normalized === undefined) return undefined;
+  const dir = normalized.split("/").slice(0, -1).join("/");
+  if (dir === "") return undefined;
+  return dir + "/**";
 }
 
 export class ApprovalStore {
@@ -75,19 +122,20 @@ export class ApprovalStore {
     this.ruleList = [...rules];
   }
 
-  /** Whether a previously granted rule covers this call. */
+  /**
+   * Whether a stored rule covers this call. A call that cannot be generalised
+   * is never covered, so malformed, chaining and escaping calls always prompt.
+   */
   isAllowed(tool: string, args: Record<string, unknown>): boolean {
-    const value = gatedValue(tool, args);
-    return this.ruleList.some((rule) => {
-      if (rule.tool !== tool) return false;
-      if (rule.argPattern === undefined) return true;
-      return value !== undefined && matchesPattern(rule.argPattern, value);
-    });
+    const derived = patternFor(tool, args);
+    if (derived === undefined) return false;
+    return this.ruleList.some((rule) => rule.tool === tool && rule.argPattern === derived);
   }
 
-  /** Persist a pattern covering this call and calls like it. */
+  /** Persist a rule covering this call and calls like it, when one is derivable. */
   allowAlways(tool: string, args: Record<string, unknown>): void {
     const argPattern = patternFor(tool, args);
+    if (argPattern === undefined) return;
     if (this.ruleList.some((r) => r.tool === tool && r.argPattern === argPattern)) return;
     this.ruleList.push({ tool, argPattern });
   }
