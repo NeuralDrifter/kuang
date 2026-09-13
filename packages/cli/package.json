@@ -1,27 +1,26 @@
 {
   "name": "bailian-cli",
   "version": "1.24.0",
-  "description": "CLI for Aliyun Model Studio (DashScope) AI Platform.",
+  "description": "Kuang 匡 — an interactive coding and media agent for Aliyun Model Studio. Independent fork of bailian-cli.",
   "keywords": [
     "agent",
     "ai",
     "cli",
     "model-studio"
   ],
-  "homepage": "https://bailian.console.aliyun.com/cli",
+  "homepage": "https://github.com/NeuralDrifter/kuang",
   "bugs": {
-    "url": "https://github.com/modelstudioai/cli/issues"
+    "url": "https://github.com/NeuralDrifter/kuang/issues"
   },
   "license": "Apache-2.0",
   "author": "Aliyun Model Studio",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/modelstudioai/cli.git",
+    "url": "git+https://github.com/NeuralDrifter/kuang.git",
     "directory": "packages/cli"
   },
   "bin": {
-    "bailian": "dist/bailian.mjs",
-    "bl": "dist/bailian.mjs"
+    "kuang": "dist/bailian.mjs"
   },
   "files": [
     "dist",

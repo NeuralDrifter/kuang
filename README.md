@@ -21,6 +21,9 @@ _Built for AI Agents. Every command works as a structured tool call._
 
 </div>
 
+> **Kuang 匡** is an independent fork of [bailian-cli](https://github.com/modelstudioai/cli).
+> Not affiliated with, endorsed by, or supported by Alibaba. See [FORK.md](FORK.md).
+
 ## Features
 
 - **Model generation** — Full-modality generation across text, image, video, and speech, with editing and reference-based generation
