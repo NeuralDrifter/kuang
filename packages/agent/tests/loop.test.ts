@@ -195,6 +195,147 @@ test("the tool loop is capped so it cannot spend without bound", async () => {
   expect(events.filter((e) => e.type === "tool_call").length).toBe(3);
 });
 
+test("an ask-tier tool already covered by a rule runs without asking", async () => {
+  const askTool: Tool = { ...echoAuto, name: "write_file", tier: "ask" };
+  const approvals = new ApprovalStore([]);
+  approvals.allowAlways("write_file", { path: "src/core/a.ts" });
+  let asked = 0;
+
+  await runTurn(
+    [{ role: "user", content: "go" }],
+    opts({
+      tools: registryWith(askTool),
+      approvals,
+      transport: scripted([
+        [
+          {
+            toolCall: {
+              index: 0,
+              id: "c1",
+              name: "write_file",
+              argumentsDelta: '{"path":"src/core/b.ts"}',
+            },
+          },
+        ],
+        [{ text: "ok" }],
+      ]),
+      ask: async () => {
+        asked++;
+        return "deny";
+      },
+    }),
+  );
+
+  expect(asked).toBe(0);
+});
+
+test("every tool call produces exactly one tool_result, even when it never runs", async () => {
+  const neverTool: Tool = { ...echoAuto, name: "destroy", tier: "never" };
+  const { sink, events } = collect();
+
+  await runTurn(
+    [{ role: "user", content: "go" }],
+    opts({
+      tools: registryWith(neverTool),
+      transport: scripted([
+        [{ toolCall: { index: 0, id: "c1", name: "destroy", argumentsDelta: "{}" } }],
+        [{ text: "ok" }],
+      ]),
+      sink,
+    }),
+  );
+
+  // A renderer keys a per-call row off callId; without a terminal event the
+  // row stays pending forever.
+  expect(events.filter((e) => e.type === "tool_call")).toHaveLength(1);
+  const results = events.filter((e) => e.type === "tool_result");
+  expect(results).toHaveLength(1);
+  expect(results[0]).toMatchObject({ callId: "c1", ok: false });
+});
+
+test("an unknown tool name becomes a recoverable tool message", async () => {
+  const out = await runTurn(
+    [{ role: "user", content: "go" }],
+    opts({
+      transport: scripted([
+        [{ toolCall: { index: 0, id: "c1", name: "no_such_tool", argumentsDelta: "{}" } }],
+        [{ text: "understood" }],
+      ]),
+    }),
+  );
+
+  expect(out.find((m) => m.role === "tool")?.content).toMatch(/unknown tool/i);
+  expect(out.at(-1)).toMatchObject({ role: "assistant", content: "understood" });
+});
+
+test("invalid JSON arguments become a tool message rather than a crash", async () => {
+  const out = await runTurn(
+    [{ role: "user", content: "go" }],
+    opts({
+      transport: scripted([
+        [{ toolCall: { index: 0, id: "c1", name: "read_file", argumentsDelta: "{not json" } }],
+        [{ text: "retrying" }],
+      ]),
+    }),
+  );
+
+  expect(out.some((m) => m.role === "tool")).toBe(true);
+  expect(out.at(-1)).toMatchObject({ role: "assistant", content: "retrying" });
+});
+
+test("a tool whose preview throws still reaches the approval prompt", async () => {
+  const badPreview: Tool = {
+    ...echoAuto,
+    name: "write_file",
+    tier: "ask",
+    preview: async () => {
+      throw new Error("preview blew up");
+    },
+  };
+  let asked = 0;
+
+  await runTurn(
+    [{ role: "user", content: "go" }],
+    opts({
+      tools: registryWith(badPreview),
+      transport: scripted([
+        [{ toolCall: { index: 0, id: "c1", name: "write_file", argumentsDelta: "{}" } }],
+        [{ text: "ok" }],
+      ]),
+      ask: async () => {
+        asked++;
+        return "deny";
+      },
+    }),
+  );
+
+  // A broken preview must not kill the turn before consent is requested.
+  expect(asked).toBe(1);
+});
+
+test("a tool whose run throws does not end the session", async () => {
+  const boom: Tool = {
+    ...echoAuto,
+    run: async () => {
+      throw new Error("tool exploded");
+    },
+  };
+
+  const out = await runTurn(
+    [{ role: "user", content: "go" }],
+    opts({
+      tools: registryWith(boom),
+      transport: scripted([
+        [{ toolCall: { index: 0, id: "c1", name: "read_file", argumentsDelta: "{}" } }],
+        [{ text: "recovered" }],
+      ]),
+    }),
+  );
+
+  expect(out.some((m) => m.role === "tool")).toBe(true);
+  expect(out.at(-1)).toMatchObject({ role: "assistant", content: "recovered" });
+});
+
 test("a transport failure surfaces as an error event, not an exception", async () => {
   const failing = async function* (): AsyncIterable<StreamChunk> {
     throw new Error("network down");

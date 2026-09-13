@@ -18,8 +18,8 @@
 import type { Language } from "bailian-cli-core";
 import { assistantMessage, toWireMessages, type AgentMessage, type ToolCall } from "./messages.ts";
 import type { EventSink, ToolPreview, Usage } from "./events.ts";
-import type { ApprovalTier, Tool, ToolRegistry } from "./tools/registry.ts";
-import type { ApprovalStore } from "./approvals.ts";
+import type { Tool, ToolRegistry } from "./tools/registry.ts";
+import type { ApprovalDecision, ApprovalStore } from "./approvals.ts";
 
 export interface StreamChunk {
   text?: string;
@@ -29,10 +29,7 @@ export interface StreamChunk {
 
 export type Transport = (body: unknown) => AsyncIterable<StreamChunk>;
 
-export type ApprovalAsker = (
-  call: ToolCall,
-  preview: ToolPreview,
-) => Promise<import("./approvals.ts").ApprovalDecision>;
+export type ApprovalAsker = (call: ToolCall, preview: ToolPreview) => Promise<ApprovalDecision>;
 
 export interface LoopOptions {
   transport: Transport;
@@ -57,20 +54,31 @@ function defaultPreview(call: ToolCall): ToolPreview {
   return { summary: `${call.name}(${call.arguments})` };
 }
 
-/** Resolve the preview to show the user before asking for approval. */
+/**
+ * Resolve the preview to show the user before asking for approval. A
+ * `preview()` that throws must not escape: that would end the whole turn
+ * before consent is even requested (e.g. `edit_file` diffing against a file
+ * deleted meanwhile). Fall back to the default summary instead.
+ */
 async function previewFor(
   tool: Tool,
   call: ToolCall,
   args: Record<string, unknown>,
 ): Promise<ToolPreview> {
-  if (tool.preview) return tool.preview(args);
-  return defaultPreview(call);
+  if (!tool.preview) return defaultPreview(call);
+  try {
+    return await tool.preview(args);
+  } catch {
+    return defaultPreview(call);
+  }
 }
 
 /**
- * Run one accumulated round-trip's worth of streamed chunks, emitting
- * `text_delta` and `tool_call` events as they resolve. Returns the full text
- * and the resolved tool calls for the round.
+ * Run one accumulated round-trip's worth of streamed chunks, buffering
+ * `text_delta` events as chunks arrive; `tool_call` events are emitted only
+ * once the stream fully drains, since a call's id/name/arguments can keep
+ * accumulating across deltas until then. Returns the full text and the
+ * resolved tool calls for the round.
  */
 async function consumeStream(
   stream: AsyncIterable<StreamChunk>,
@@ -113,36 +121,40 @@ async function consumeStream(
   return { text, toolCalls, usage };
 }
 
-/** Run one tool call through the approval flow, returning the tool message to push. */
+/**
+ * Run one tool call through the approval flow, returning the tool message to
+ * push. Every path emits exactly one `tool_result` for this call's `id` —
+ * including the paths where the tool never runs (`never`, denied, unknown
+ * name, unparsable arguments) — so a renderer keying a per-call row off
+ * `callId` never has one stuck pending.
+ */
 async function resolveCall(call: ToolCall, options: LoopOptions): Promise<AgentMessage> {
   const { tools, approvals, ask, sink } = options;
+
+  const refuse = (reason: string, content: string): AgentMessage => {
+    sink({ type: "tool_result", callId: call.id, ok: false, summary: reason });
+    return { role: "tool", toolCallId: call.id, content };
+  };
 
   let args: Record<string, unknown>;
   try {
     args = JSON.parse(call.arguments) as Record<string, unknown>;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return {
-      role: "tool",
-      toolCallId: call.id,
-      content: `Could not parse arguments as JSON: ${message}`,
-    };
+    return refuse(
+      `Invalid JSON arguments: ${message}`,
+      `Could not parse arguments as JSON: ${message}`,
+    );
   }
 
   const tool = tools.get(call.name);
   if (!tool) {
-    return {
-      role: "tool",
-      toolCallId: call.id,
-      content: `Unknown tool: ${call.name}`,
-    };
+    return refuse(`Unknown tool: ${call.name}`, `Unknown tool: ${call.name}`);
   }
-
-  const tier: ApprovalTier = tool.tier;
 
   const runAndReport = async (): Promise<AgentMessage> => {
     try {
-      const result = await tools.dispatch(call.name, args);
+      const result = await tool.run(args);
       sink({ type: "tool_result", callId: call.id, ok: true, summary: result });
       return { role: "tool", toolCallId: call.id, content: result };
     } catch (err) {
@@ -152,15 +164,15 @@ async function resolveCall(call: ToolCall, options: LoopOptions): Promise<AgentM
     }
   };
 
-  if (tier === "never") {
-    return { role: "tool", toolCallId: call.id, content: "This tool is not permitted." };
+  if (tool.tier === "never") {
+    return refuse("Not permitted", "This tool is not permitted.");
   }
 
-  if (tier === "auto") {
+  if (tool.tier === "auto") {
     return runAndReport();
   }
 
-  // tier === "ask"
+  // tool.tier === "ask"
   if (approvals.isAllowed(call.name, args)) {
     return runAndReport();
   }
@@ -170,7 +182,7 @@ async function resolveCall(call: ToolCall, options: LoopOptions): Promise<AgentM
   const decision = await ask(call, preview);
 
   if (decision === "deny") {
-    return { role: "tool", toolCallId: call.id, content: "Denied by the user." };
+    return refuse("Denied by the user", "Denied by the user.");
   }
   if (decision === "allow_always") {
     approvals.allowAlways(call.name, args);
