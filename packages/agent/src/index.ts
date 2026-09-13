@@ -43,6 +43,21 @@ function localize(text: LocalizedText, language: Language): string {
   return typeof text === "string" ? text : (text[language] ?? text["en-US"]);
 }
 
+/**
+ * Whether `err` is `rl.question` rejecting because stdin has already ended.
+ * Verified empirically on Node v24: closing the input stream and then
+ * calling `question()` again rejects with a plain `Error` whose `code` is
+ * `"ERR_USE_AFTER_CLOSE"` (message `"readline was closed"`) — not a `close`
+ * event racing the call, and not any other code.
+ */
+function isEof(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { code?: unknown }).code === "ERR_USE_AFTER_CLOSE"
+  );
+}
+
 /** Run the interactive agent until the user types `/exit`. */
 export async function runAgent(ctx: CommandContext): Promise<void> {
   const language = ctx.settings.language;
@@ -70,8 +85,9 @@ export async function runAgent(ctx: CommandContext): Promise<void> {
   const readLine = async (prompt: string): Promise<string | undefined> => {
     try {
       return await rl.question(prompt);
-    } catch {
-      return undefined;
+    } catch (err) {
+      if (isEof(err)) return undefined;
+      throw err;
     }
   };
 
