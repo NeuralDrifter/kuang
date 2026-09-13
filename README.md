@@ -195,6 +195,9 @@ limitations, both deliberate and both tracked:
 
 Do not run this against a repository you do not trust.
 
+Every known bug, gap and untested area is written down in
+[docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Architecture and conventions are in

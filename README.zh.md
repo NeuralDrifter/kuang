@@ -180,6 +180,9 @@ kuang usage
 
 请不要在你不信任的仓库上运行它。
 
+全部已知缺陷、待办项与未验证部分都记录在
+[docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)。
+
 ## 参与贡献
 
 见 [CONTRIBUTING.md](CONTRIBUTING.md)。架构与约定见 [AGENTS.md](AGENTS.md)。
