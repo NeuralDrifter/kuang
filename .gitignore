@@ -61,3 +61,10 @@ packages/cli/scene/**/outputs/
 
 # Superpowers SDD scratch (plan ledgers, briefs, review packages)
 .superpowers/
+
+# Local assistant / editor state
+.claude/
+.gemini/
+
+# Internal design and process notes (kept locally, not published)
+docs/superpowers/
