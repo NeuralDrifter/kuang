@@ -46,6 +46,7 @@
     "bailian-cli-runtime": "workspace:*",
     "boxen": "catalog:",
     "chalk": "catalog:",
+    "kuang-agent": "workspace:*",
     "marked": "catalog:",
     "marked-terminal": "catalog:",
     "picocolors": "catalog:",

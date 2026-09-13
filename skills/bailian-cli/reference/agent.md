@@ -7,27 +7,27 @@ Index: [index.md](index.md)
 
 ## Commands in this group
 
-| Command | Authentication | Description |
-| --- | --- | --- |
-| `bl agent` | API Key | Launch the Interactive AI Agent |
+| Command    | Authentication | Description                  |
+| ---------- | -------------- | ---------------------------- |
+| `bl agent` | API Key        | Launch the interactive agent |
 
 ## Command details
 
 ### `bl agent`
 
-| Field | Value |
-| --- | --- |
-| **Name** | `agent` |
-| **Description** | Launch the Interactive AI Agent |
-| **Authentication** | API Key |
-| **Usage** | `bl agent [flags]` |
+| Field              | Value                        |
+| ------------------ | ---------------------------- |
+| **Name**           | `agent`                      |
+| **Description**    | Launch the interactive agent |
+| **Authentication** | API Key                      |
+| **Usage**          | `bl agent [flags]`           |
 
 #### Flags
 
-| Flag | Type | Required | Description |
-| --- | --- | --- | --- |
-| `--api-key <key>` | string | no | API key |
-| `--base-url <url>` | string | no | API base URL |
+| Flag               | Type   | Required | Description  |
+| ------------------ | ------ | -------- | ------------ |
+| `--api-key <key>`  | string | no       | API key      |
+| `--base-url <url>` | string | no       | API base URL |
 
 #### Examples
 
