@@ -79,6 +79,25 @@ importers:
         specifier: 'catalog:'
         version: 0.1.22(@types/node@25.6.0)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.0)(typescript@6.0.3)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.0)(yaml@2.9.0))(yaml@2.9.0)
 
+  packages/agent:
+    dependencies:
+      bailian-cli-core:
+        specifier: workspace:*
+        version: link:../core
+      bailian-cli-runtime:
+        specifier: workspace:*
+        version: link:../runtime
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.2
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.3
+      vite-plus:
+        specifier: 0.1.22
+        version: 0.1.22(@types/node@24.12.2)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.0)(typescript@6.0.3)(vite@8.0.10(@types/node@24.12.2)(esbuild@0.28.1)(jiti@2.6.1)(tsx@4.23.0)(yaml@2.9.0))(yaml@2.9.0)
+
   packages/bailian-kb-dsh:
     dependencies:
       yaml:
