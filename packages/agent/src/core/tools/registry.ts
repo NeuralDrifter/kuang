@@ -8,6 +8,7 @@
  */
 import type { ChatTool, Language, LocalizedText } from "bailian-cli-core";
 import type { ToolPreview } from "../events.ts";
+import { localize } from "../i18n.ts";
 
 /**
  * How much consent a tool needs (spec §7).
@@ -26,11 +27,6 @@ export interface Tool {
   run(args: Record<string, unknown>): Promise<string>;
   /** Shown before approval. Required in practice for `ask` tools. */
   preview?(args: Record<string, unknown>): Promise<ToolPreview>;
-}
-
-/** Resolve a LocalizedText against the active language. */
-function localize(text: LocalizedText, language: Language): string {
-  return typeof text === "string" ? text : (text[language] ?? text["en-US"]);
 }
 
 export class ToolRegistry {

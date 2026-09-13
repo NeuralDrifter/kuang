@@ -11,7 +11,7 @@
  * English-speaking user regardless of what they typed.
  */
 import { createInterface } from "node:readline/promises";
-import type { CommandContext, Language, LocalizedText } from "bailian-cli-core";
+import type { CommandContext, LocalizedText } from "bailian-cli-core";
 import { ApprovalStore } from "./core/approvals.ts";
 import type { ApprovalDecision } from "./core/approvals.ts";
 import { runTurn } from "./core/loop.ts";
@@ -22,6 +22,7 @@ import { ToolRegistry } from "./core/tools/registry.ts";
 import { probeInterpreters, shellTool } from "./core/tools/shell.ts";
 import { dashscopeTransport } from "./core/transport.ts";
 import { plainRenderer } from "./ui/plain.ts";
+import { localize } from "./core/i18n.ts";
 
 /** Used only when the user has not configured a default text model. */
 const FALLBACK_MODEL = "qwen-max";
@@ -37,11 +38,6 @@ const SYSTEM_PROMPT: LocalizedText = {
     "当前项目文件，以及运行 shell 命令的工具。请优先使用工具，而不是要求用户手动操作。" +
     "请始终使用中文回复。",
 };
-
-/** Resolve a LocalizedText against the active language. */
-function localize(text: LocalizedText, language: Language): string {
-  return typeof text === "string" ? text : (text[language] ?? text["en-US"]);
-}
 
 /**
  * Whether `err` is `rl.question` rejecting because stdin has already ended.

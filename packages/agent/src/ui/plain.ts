@@ -15,11 +15,7 @@
  */
 import type { Language, LocalizedText } from "bailian-cli-core";
 import type { AgentEvent, EventSink } from "../core/events.ts";
-
-/** Resolve a LocalizedText against the active language. */
-function localize(text: LocalizedText, language: Language): string {
-  return typeof text === "string" ? text : (text[language] ?? text["en-US"]);
-}
+import { localize } from "../core/i18n.ts";
 
 const LABELS = {
   running: { "en-US": "Running", "zh-CN": "执行中" },
