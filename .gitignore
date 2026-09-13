@@ -58,3 +58,6 @@ packages/cli/scene/**/outputs/
 .bailian-agent-history.json
 .bailian/
 
+
+# Superpowers SDD scratch (plan ledgers, briefs, review packages)
+.superpowers/
