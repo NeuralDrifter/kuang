@@ -4,7 +4,9 @@
 transcription or a knowledge lookup and it performs one, instead of only
 reading and writing files.
 
-**Status:** not started. Stage 1 (agent core) is complete — see
+**Status:** complete. All seven tasks done; the agent reaches the platform and
+media request construction is verified with `--dry-run`. Live media responses
+remain untested pending credits. See
 [agent-architecture.md](agent-architecture.md) for the overall design.
 
 ---

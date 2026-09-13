@@ -36,28 +36,49 @@ Everything the upstream CLI does still works. Kuang adds a host for it.
 
 ## Status
 
-Early. The agent core is built, tested and runs against the live API. The
-platform tool surface — the part that makes it generate media — is next.
+Early, but usable. The agent runs against the live API and can reach the whole
+platform command surface. Media generation is wired and its requests are
+verified; only the live media responses are untested, for want of credits.
 
 **Working today**
 
 - Interactive agent (`kuang agent`) — streaming replies, token accounting, clean exit
 - Six local tools: `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `shell`
+- **The whole platform as tools.** Seven first-class capabilities — image, video,
+  speech, transcription, vision, web search, knowledge retrieval — plus
+  `bl_search_commands` / `bl_describe_command` / `bl_run_command`, which reach
+  all 228 upstream commands for a few hundred tokens of context instead of the
+  ~60k it would cost to hand over every schema
+- Tool schemas are **generated from the CLI's own flag metadata**, so they are
+  bilingual for free and cannot drift from the commands they call
 - Three-tier approvals: reads run silently, writes and shell ask first, with a
   unified diff shown **before** you approve, not after
+- Anything that spends media credits asks first and **says so in the prompt**
 - "Always allow" stores a _pattern_, not the literal command, and fails closed on
   anything it cannot safely generalise
 - Shell with real interpreter selection (pwsh / powershell / bash / python /
   python3), probed at startup — no more assuming `bash` on Windows
 - Every path resolved against the project root and refused if it escapes
-- 77 tests across 10 files, headless — the agent core is tested with no terminal
+- 140 tests — 135 headless unit tests plus 5 that drive the real CLI
+
+**Wired but not verified against the live API**
+
+Image, video and speech generation are implemented and their request
+construction is tested end-to-end against the real CLI with `--dry-run`, which
+builds and prints the exact request without calling the API. What has **not**
+been exercised is the live response: the account's media credits are exhausted
+and do not renew.
+
+Two bugs were already caught this way and fixed — `--download` needs a path
+rather than being a switch, and `speech synthesize` requires a voice. There may
+be more that only a real response would reveal. Treat these three as untested.
 
 **Not yet**
 
-- The 228 `bl` commands as agent tools (image, video, speech, knowledge, fine-tune)
 - Session persistence and `--resume`
 - Ink-based TUI — the current renderer is plain text
-- Full bilingual coverage — UI labels are localized, payload strings are not yet
+- Full bilingual coverage — UI labels and tool descriptions are localized,
+  some payload strings are not yet
 - Skills as a knowledge layer
 - PII redaction (the inherited prototype's version was removed; see FORK.md)
 
@@ -124,6 +145,26 @@ Approval required: shell
 
 Answer `a` and it remembers the _pattern_ `pnpm test*`, so `pnpm test --watch`
 won't ask again — but `rm -rf /` still will. Type `/exit` or press Ctrl+D to leave.
+
+It can also reach the platform. Ask for something it has no local tool for and
+it will find the command itself:
+
+```
+> what commands are there for checking my quota?
+
+Running: bl_search_commands({"query": "quota"})
+✓ quota check — Check current usage against rate limits
+  quota list  — View model rate limits (QPM/TPM, account and workspace level)
+  usage free  — Query free-tier quota for models
+```
+
+Anything that spends media credits stops and tells you so first:
+
+```
+Approval required: generate_image
+  image generate: a cat in a spacesuit on Mars — spends media credits
+[y]es / [n]o / [a]lways:
+```
 
 ## The inherited CLI
 
