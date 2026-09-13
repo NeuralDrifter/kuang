@@ -60,8 +60,23 @@ export async function runAgent(ctx: CommandContext): Promise<void> {
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
 
+  /**
+   * Read one line, or `undefined` at EOF. `rl.question` rejects with
+   * `ERR_USE_AFTER_CLOSE` once stdin ends — Ctrl+D at an interactive prompt,
+   * or a piped input's last line — and an unhandled rejection there would
+   * propagate to the CLI's generic error handler, which has no idea this is
+   * a normal way to leave a REPL. EOF is treated like `/exit`, not an error.
+   */
+  const readLine = async (prompt: string): Promise<string | undefined> => {
+    try {
+      return await rl.question(prompt);
+    } catch {
+      return undefined;
+    }
+  };
+
   const ask: ApprovalAsker = async (): Promise<ApprovalDecision> => {
-    const answer = (await rl.question("[y]es / [n]o / [a]lways: ")).trim().toLowerCase();
+    const answer = (await readLine("[y]es / [n]o / [a]lways: "))?.trim().toLowerCase();
     if (answer === "a") return "allow_always";
     if (answer === "y") return "allow";
     return "deny";
@@ -71,7 +86,9 @@ export async function runAgent(ctx: CommandContext): Promise<void> {
 
   try {
     for (;;) {
-      const input = (await rl.question("> ")).trim();
+      const raw = await readLine("> ");
+      if (raw === undefined) return; // EOF: leave cleanly, exactly like /exit.
+      const input = raw.trim();
       if (input === "/exit") return;
       if (input === "") continue;
 
