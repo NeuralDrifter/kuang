@@ -98,14 +98,13 @@ export function patternFor(tool: string, args: Record<string, unknown>): string 
 
   if (tool === "shell") {
     if (SHELL_CHAINING.test(value)) return undefined;
-    const parts = value.trim().split(/\s+/).filter(Boolean);
-    const command = [];
-    for (const part of parts) {
-      if (part.startsWith("-")) break;
-      command.push(part);
-    }
-    if (command.length === 0) return undefined;
-    return command.join(" ") + "*";
+    // Exactly the first two whitespace-separated words, options included.
+    // Do NOT stop at the first option: the second token of a real command is
+    // usually a flag, so truncating there collapses `rm -f x` to `rm*`, which
+    // then auto-approves `rm -rf /`.
+    const words = value.trim().split(/\s+/).filter(Boolean).slice(0, 2);
+    if (words.length === 0) return undefined;
+    return words.join(" ") + "*";
   }
 
   const normalized = normalizePath(value);

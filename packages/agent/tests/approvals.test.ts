@@ -43,13 +43,33 @@ test("a chaining command cannot even be stored as a rule", () => {
   expect(store.isAllowed("shell", { command: "pnpm test" })).toBe(false);
 });
 
+test("a command whose second word is an option keeps that option in the rule", () => {
+  const store = new ApprovalStore([]);
+  store.allowAlways("shell", { command: "rm -f build/tmp.txt" });
+
+  expect(store.isAllowed("shell", { command: "rm -f build/other.txt" })).toBe(true);
+  expect(store.isAllowed("shell", { command: "rm -rf /" })).toBe(false);
+  expect(store.isAllowed("shell", { command: "rm -rf ~/.ssh" })).toBe(false);
+});
+
+test("an option in second position does not authorise every flag of a binary", () => {
+  const store = new ApprovalStore([]);
+  store.allowAlways("shell", { command: "git --no-pager diff" });
+
+  expect(
+    store.isAllowed("shell", { command: "git -c core.pager=cat push --force origin main" }),
+  ).toBe(false);
+  expect(store.isAllowed("shell", { command: "git push --force" })).toBe(false);
+});
+
 test("an approved command does not widen to other commands sharing a prefix", () => {
   const store = new ApprovalStore([]);
-  store.allowAlways("shell", { command: "ls" });
+  store.allowAlways("shell", { command: "git diff" });
 
-  expect(store.isAllowed("shell", { command: "ls -la" })).toBe(true);
-  expect(store.isAllowed("shell", { command: "lsof -i" })).toBe(false);
-  expect(store.isAllowed("shell", { command: "git diff" })).toBe(false);
+  expect(store.isAllowed("shell", { command: "git diff" })).toBe(true);
+  expect(store.isAllowed("shell", { command: "git diff --stat" })).toBe(true);
+  expect(store.isAllowed("shell", { command: "git log" })).toBe(false);
+  expect(store.isAllowed("shell", { command: "gitk" })).toBe(false);
 });
 
 test("an allowlist entry never leaks across tools", () => {
