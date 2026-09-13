@@ -250,4 +250,4 @@ export {
   sandboxTemplateList,
   sandboxTemplateUpdate,
 } from "./commands/sandbox/template.ts";
-export { default as agentInteract, agentCommand } from "./commands/agent/index.ts";
+export { default as agentInteract, agentCommand, makeCliInvoker } from "./commands/agent/index.ts";

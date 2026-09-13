@@ -30,7 +30,7 @@ function cmd(flagNames: string[], switches: string[] = []) {
 
 const COMMANDS: Record<string, AnyCommand> = {
   "image generate": cmd(["prompt", "size", "n", "negativePrompt", "outDir", "outPrefix"]),
-  "video generate": cmd(["prompt", "image", "resolution", "ratio", "duration"], ["download"]),
+  "video generate": cmd(["prompt", "image", "resolution", "ratio", "duration", "download"]),
   "speech synthesize": cmd(["text", "voice", "format", "out", "language"]),
   "speech recognize": cmd(["url", "language", "out"]),
   "vision describe": cmd(["image", "video", "prompt"]),
@@ -118,14 +118,29 @@ test("generate_image invokes image generate with the prompt", async () => {
   expect(argv[argv.indexOf("--n") + 1]).toBe("2");
 });
 
-test("generate_video always downloads, so the file lands locally", async () => {
+test("generate_video passes download as a path, not a bare switch", async () => {
   const p = platform();
-  await tool(mediaTools(p, "en-US"), "generate_video").run({ prompt: "a cat" });
+  await tool(mediaTools(p, "en-US"), "generate_video").run({
+    prompt: "a cat",
+    download: "./out.mp4",
+  });
 
   const argv = p.calls[0].argv;
   expect(argv.slice(0, 2)).toEqual(["video", "generate"]);
-  // Without this the command returns a URL and nothing reaches the project.
-  expect(argv).toContain("--download");
+  // The real flag is `--download <path>`; emitting it bare is a parse error.
+  expect(argv[argv.indexOf("--download") + 1]).toBe("./out.mp4");
+});
+
+test("generate_video omits download entirely when no path is given", async () => {
+  const p = platform();
+  await tool(mediaTools(p, "en-US"), "generate_video").run({ prompt: "a cat" });
+  expect(p.calls[0].argv).not.toContain("--download");
+});
+
+test("text_to_speech requires a voice, which the command validates for", () => {
+  const spec = tool(mediaTools(platform(), "en-US"), "text_to_speech");
+  const params = spec.parameters as { required?: string[] };
+  expect(params.required).toContain("voice");
 });
 
 test("text_to_speech passes the text through", async () => {

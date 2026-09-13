@@ -89,9 +89,9 @@ const SPECS: MediaSpec[] = [
     path: "video generate",
     description: {
       "en-US":
-        "Generate a video from a text prompt, or animate a still image. Downloads the result into the project. Slow and spends media credits.",
+        "Generate a video from a text prompt, or animate a still image. Pass `download` with a local path to save the result into the project, otherwise only a URL is returned. Slow and spends media credits.",
       "zh-CN":
-        "根据文本提示词生成视频，或让静态图片动起来。结果会下载到项目中。耗时较长且会消耗媒体额度。",
+        "根据文本提示词生成视频，或让静态图片动起来。传入 download（本地路径）可将结果保存到项目中，否则只返回 URL。耗时较长且会消耗媒体额度。",
     },
     properties: {
       prompt: str("What should happen in the video", "视频内容描述"),
@@ -99,10 +99,12 @@ const SPECS: MediaSpec[] = [
       resolution: str("Output resolution", "输出分辨率"),
       ratio: str("Aspect ratio, e.g. 16:9", "画面比例，如 16:9"),
       duration: num("Length in seconds", "时长（秒）"),
+      download: str(
+        "Local path to save the finished video to; omit and you get only a URL",
+        "保存视频的本地路径；不填则只返回 URL",
+      ),
     },
     required: ["prompt"],
-    // Without this the command returns a URL and nothing reaches the project.
-    fixed: { download: true },
     previewArg: "prompt",
   },
   {
@@ -114,12 +116,15 @@ const SPECS: MediaSpec[] = [
     },
     properties: {
       text: str("Text to speak", "要朗读的文本"),
-      voice: str("Voice name", "音色名称"),
+      voice: str(
+        "Voice ID — required. Run `speech synthesize --list-voices` via bl_run_command to see the built-in voices",
+        "音色 ID——必填。可通过 bl_run_command 执行 `speech synthesize --list-voices` 查看内置音色",
+      ),
       format: str("Audio format, e.g. mp3", "音频格式，如 mp3"),
       language: str("Language of the text", "文本语言"),
       out: str("Output file path", "输出文件路径"),
     },
-    required: ["text"],
+    required: ["text", "voice"],
     previewArg: "text",
   },
   {

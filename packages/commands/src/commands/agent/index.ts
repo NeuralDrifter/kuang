@@ -27,32 +27,45 @@ const DEFAULT_TIMEOUT_MS = 300_000;
  * Always an argv array — a model-supplied flag value never becomes shell
  * syntax, because nothing joins this into a string.
  */
-const invoke: CommandInvoker = (argv, opts = {}) =>
-  new Promise((resolve) => {
-    const args = [...process.execArgv, process.argv[1], ...argv];
-    if (opts.dryRun) args.push("--dry-run");
+export function makeCliInvoker(
+  entry: string = process.argv[1],
+  /**
+   * Loader flags for the child. Defaults to this process's own, which is what
+   * makes a `.ts` entry runnable in development. A caller running under a
+   * different loader — a test runner, say — must pass its own.
+   */
+  execArgv: string[] = process.execArgv,
+): CommandInvoker {
+  return (argv, opts = {}) =>
+    new Promise((resolve) => {
+      const args = [...execArgv, entry, ...argv];
+      if (opts.dryRun) args.push("--dry-run");
 
-    execFile(
-      process.execPath,
-      args,
-      {
-        timeout: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-        maxBuffer: MAX_OUTPUT_BYTES,
-        windowsHide: true,
-      },
-      (error, stdout, stderr) => {
-        const exitCode =
-          error && typeof (error as { code?: unknown }).code === "number"
-            ? ((error as { code: number }).code ?? 1)
-            : error
-              ? 1
-              : 0;
-        // A failed command is a result the model should read and react to,
-        // not an exception that ends the turn.
-        resolve({ ok: !error, stdout, stderr, exitCode });
-      },
-    );
-  });
+      execFile(
+        process.execPath,
+        args,
+        {
+          timeout: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+          maxBuffer: MAX_OUTPUT_BYTES,
+          windowsHide: true,
+        },
+        (error, stdout, stderr) => {
+          const exitCode =
+            error && typeof (error as { code?: unknown }).code === "number"
+              ? ((error as { code: number }).code ?? 1)
+              : error
+                ? 1
+                : 0;
+          // A failed command is a result the model should read and react to,
+          // not an exception that ends the turn.
+          resolve({ ok: !error, stdout, stderr, exitCode });
+        },
+      );
+    });
+}
+
+/** Re-invokes whichever entry started this process. */
+const invoke = makeCliInvoker();
 
 /**
  * The agent command.

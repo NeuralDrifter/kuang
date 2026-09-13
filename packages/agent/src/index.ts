@@ -28,6 +28,7 @@ import { plainRenderer } from "./ui/plain.ts";
 import { localize } from "./core/i18n.ts";
 
 export type { CommandInvoker, InvokeResult, PlatformAccess } from "./core/platform.ts";
+export { buildArgv } from "./core/tools/bailian.ts";
 
 /** Used only when the user has not configured a default text model. */
 const FALLBACK_MODEL = "qwen-max";
