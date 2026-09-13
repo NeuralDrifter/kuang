@@ -244,3 +244,14 @@ test("a non-string command path is refused rather than coerced", async () => {
   ).rejects.toThrow(/unknown command/i);
   expect(p.calls).toHaveLength(0);
 });
+
+test("the preview flags an invented command path before the user approves it", async () => {
+  const tools = bailianTools(platform(), "en-US");
+  const run = tool(tools, "bl_run_command");
+
+  const good = await run.preview!({ path: "usage", flags: {} });
+  const bad = await run.preview!({ path: "project usage", flags: {} });
+
+  expect(good.summary).not.toMatch(/no such command/i);
+  expect(bad.summary).toMatch(/no such command/i);
+});

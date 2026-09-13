@@ -116,6 +116,10 @@ const TEXT = {
     "en-US": "Unknown command",
     "zh-CN": "未知命令",
   },
+  willFail: {
+    "en-US": "no such command — this call will fail",
+    "zh-CN": "该命令不存在——此次调用将失败",
+  },
   failed: {
     "en-US": "Command failed",
     "zh-CN": "命令执行失败",
@@ -199,13 +203,20 @@ export function bailianTools(platform: PlatformAccess, language: Language): Tool
         },
         required: ["path"],
       },
-      preview: async (args) => ({
-        summary: commandLine(
-          asIdentifier(args.path),
+      preview: async (args) => {
+        const path = asIdentifier(args.path);
+        const known = findCommand(catalog, path);
+        const line = commandLine(
+          path,
           (args.flags ?? {}) as Record<string, unknown>,
-          platform.commands[asIdentifier(args.path)]?.flags ?? {},
-        ),
-      }),
+          platform.commands[path]?.flags ?? {},
+        );
+        // A model can invent a plausible-looking path. Say so in the prompt,
+        // rather than having the user approve something that then fails.
+        return {
+          summary: known ? line : `${line}  [${localize(TEXT.willFail, language)}]`,
+        };
+      },
       run: async (args) => {
         const entry = resolve(args.path);
         const flags = (args.flags ?? {}) as Record<string, unknown>;

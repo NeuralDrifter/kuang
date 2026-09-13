@@ -347,3 +347,28 @@ test("a transport failure surfaces as an error event, not an exception", async (
 
   expect(events.find((e) => e.type === "error")).toMatchObject({ message: /network down/ });
 });
+
+test("a null arguments delta does not append the text 'null'", async () => {
+  const out = await runTurn(
+    [{ role: "user", content: "go" }],
+    opts({
+      transport: scripted([
+        [
+          {
+            toolCall: { index: 0, id: "c1", name: "read_file", argumentsDelta: '{"path":"a.ts"}' },
+          },
+          // Trailing frame carrying nulls, as the real API sends.
+          { toolCall: { index: 0, id: null, name: null, argumentsDelta: null } as never },
+        ],
+        [{ text: "ok" }],
+      ]),
+    }),
+  );
+
+  const assistant = out.find((m) => m.role === "assistant" && m.toolCalls.length > 0);
+  expect((assistant as { toolCalls: { arguments: string }[] }).toolCalls[0].arguments).toBe(
+    '{"path":"a.ts"}',
+  );
+  // And it actually ran, rather than failing to parse.
+  expect(out.some((m) => m.role === "tool" && m.content.includes("contents of"))).toBe(true);
+});

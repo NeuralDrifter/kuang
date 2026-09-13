@@ -72,3 +72,19 @@ test("malformed JSON is skipped rather than crashing the stream", async () => {
   }
   expect(out).toEqual([{ text: "ok" }]);
 });
+
+test("null name and arguments on a trailing tool-call frame are not emitted", async () => {
+  // The API sends `arguments: null` on trailing frames; passed through, the
+  // loop appends the text "null" and the model's JSON stops parsing.
+  const payload = JSON.stringify({
+    choices: [
+      {
+        delta: { tool_calls: [{ index: 0, id: null, function: { name: null, arguments: null } }] },
+      },
+    ],
+  });
+  const out = [];
+  for await (const c of chunksFromSSE(sse([payload]))) out.push(c);
+
+  expect(out).toEqual([{ toolCall: { index: 0 } }]);
+});

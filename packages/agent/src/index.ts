@@ -17,12 +17,17 @@ import type { ApprovalDecision } from "./core/approvals.ts";
 import { runTurn } from "./core/loop.ts";
 import type { ApprovalAsker } from "./core/loop.ts";
 import type { AgentMessage } from "./core/messages.ts";
+import type { PlatformAccess } from "./core/platform.ts";
+import { bailianTools } from "./core/tools/bailian.ts";
 import { fsTools } from "./core/tools/fs.ts";
+import { mediaTools } from "./core/tools/media.ts";
 import { ToolRegistry } from "./core/tools/registry.ts";
 import { probeInterpreters, shellTool } from "./core/tools/shell.ts";
 import { dashscopeTransport } from "./core/transport.ts";
 import { plainRenderer } from "./ui/plain.ts";
 import { localize } from "./core/i18n.ts";
+
+export type { CommandInvoker, InvokeResult, PlatformAccess } from "./core/platform.ts";
 
 /** Used only when the user has not configured a default text model. */
 const FALLBACK_MODEL = "qwen-max";
@@ -54,14 +59,25 @@ function isEof(err: unknown): boolean {
   );
 }
 
-/** Run the interactive agent until the user types `/exit`. */
-export async function runAgent(ctx: CommandContext): Promise<void> {
+/**
+ * Run the interactive agent until the user types `/exit`.
+ *
+ * `platform` is optional: without it the agent has local tools only. The
+ * launcher supplies it, because the command map and the ability to re-invoke
+ * the CLI both live on the product side — this package cannot reach either
+ * without importing `commands`, which depends on it.
+ */
+export async function runAgent(ctx: CommandContext, platform?: PlatformAccess): Promise<void> {
   const language = ctx.settings.language;
   const cwd = process.cwd();
 
   const tools = new ToolRegistry();
   for (const tool of fsTools(cwd)) tools.register(tool);
   tools.register(shellTool(cwd, await probeInterpreters()));
+  if (platform) {
+    for (const tool of mediaTools(platform, language)) tools.register(tool);
+    for (const tool of bailianTools(platform, language)) tools.register(tool);
+  }
 
   // In-memory only: persistence to ~/.bailian/agent/approvals.json is Plan 2.
   const approvals = new ApprovalStore();

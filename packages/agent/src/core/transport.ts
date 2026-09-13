@@ -80,9 +80,11 @@ export async function* chunksFromSSE(
         yield {
           toolCall: {
             index: toolCall.index,
-            id: toolCall.id,
-            name: toolCall.function?.name,
-            argumentsDelta: toolCall.function?.arguments,
+            // `?? undefined` so a null from the wire never reaches the loop as
+            // a value: the API sends `arguments: null` on trailing frames.
+            id: toolCall.id ?? undefined,
+            name: toolCall.function?.name ?? undefined,
+            argumentsDelta: toolCall.function?.arguments ?? undefined,
           },
         };
       }

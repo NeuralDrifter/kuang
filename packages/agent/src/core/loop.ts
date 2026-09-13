@@ -102,9 +102,13 @@ async function consumeStream(
         pending.set(delta.index, entry);
         order.push(delta.index);
       }
-      if (delta.id !== undefined) entry.id = delta.id;
-      if (delta.name !== undefined) entry.name = delta.name;
-      if (delta.argumentsDelta !== undefined) entry.arguments += delta.argumentsDelta;
+      // Guard for null, not just undefined: the API sends `arguments: null`
+      // on trailing tool-call frames, and `+= null` appends the text "null",
+      // corrupting the JSON the model carefully built. A null `name` would
+      // likewise clobber a good one.
+      if (delta.id != null) entry.id = delta.id;
+      if (delta.name != null) entry.name = delta.name;
+      if (delta.argumentsDelta != null) entry.arguments += delta.argumentsDelta;
     }
     if (chunk.usage !== undefined) usage = chunk.usage;
   }
