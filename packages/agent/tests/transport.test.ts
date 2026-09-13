@@ -46,6 +46,16 @@ test("[DONE] terminates the stream", async () => {
   expect(out).toEqual([]);
 });
 
+test("usage from the final SSE frame becomes a usage chunk", async () => {
+  const payload = JSON.stringify({
+    choices: [],
+    usage: { prompt_tokens: 100, completion_tokens: 20 },
+  });
+  const out = [];
+  for await (const c of chunksFromSSE(sse([payload]))) out.push(c);
+  expect(out).toEqual([{ usage: { promptTokens: 100, completionTokens: 20 } }]);
+});
+
 test("malformed JSON is skipped rather than crashing the stream", async () => {
   const out = [];
   for await (const c of chunksFromSSE(

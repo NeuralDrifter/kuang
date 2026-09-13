@@ -27,8 +27,18 @@ interface StreamChoice {
   };
 }
 
+interface StreamUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+}
+
 interface StreamPayload {
   choices?: StreamChoice[];
+  /**
+   * Present only on the final frame, and only when the request set
+   * `stream_options: { include_usage: true }`. `choices` is empty on that frame.
+   */
+  usage?: StreamUsage;
 }
 
 /**
@@ -68,6 +78,15 @@ export async function* chunksFromSSE(
         };
       }
     }
+
+    if (payload.usage !== undefined) {
+      yield {
+        usage: {
+          promptTokens: payload.usage.prompt_tokens,
+          completionTokens: payload.usage.completion_tokens,
+        },
+      };
+    }
   }
 }
 
@@ -75,10 +94,17 @@ export async function* chunksFromSSE(
 export function dashscopeTransport(client: Client): Transport {
   return (body: unknown) => {
     async function* run(): AsyncIterable<StreamChunk> {
+      // `include_usage` makes the API emit a final usage-only frame (empty
+      // `choices`) that `chunksFromSSE` turns into a `usage` chunk; without it
+      // the stream never reports token counts at all.
+      const requestBody = {
+        ...(body as Record<string, unknown>),
+        stream_options: { include_usage: true },
+      };
       const response = await client.request({
         path: chatPath(),
         method: "POST",
-        body,
+        body: requestBody,
         stream: true,
       });
       yield* chunksFromSSE(parseSSE(response));

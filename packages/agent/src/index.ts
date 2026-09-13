@@ -33,8 +33,8 @@ const SYSTEM_PROMPT: LocalizedText = {
     "and to run shell commands. Prefer using your tools over asking the user to " +
     "perform actions manually. Always reply in English.",
   "zh-CN":
-    "你是匡,一个运行在用户终端中的交互式编程 Agent。你拥有读取、搜索、写入和编辑" +
-    "当前项目文件,以及运行 shell 命令的工具。请优先使用工具,而不是要求用户手动操作。" +
+    "你是匡，一个运行在用户终端中的交互式编程 Agent。你拥有读取、搜索、写入和编辑" +
+    "当前项目文件，以及运行 shell 命令的工具。请优先使用工具，而不是要求用户手动操作。" +
     "请始终使用中文回复。",
 };
 
@@ -75,7 +75,8 @@ export async function runAgent(ctx: CommandContext): Promise<void> {
       if (input === "/exit") return;
       if (input === "") continue;
 
-      messages.push({ role: "user", content: input });
+      const userMessage: AgentMessage = { role: "user", content: input };
+      messages.push(userMessage);
       messages = await runTurn(messages, {
         transport,
         tools,
@@ -85,6 +86,15 @@ export async function runAgent(ctx: CommandContext): Promise<void> {
         model,
         language,
       });
+
+      // `runTurn` returns the transcript as far as it got, even on failure. If
+      // the turn never produced anything — a transport error on the very first
+      // round-trip — the user's message is still the last entry; drop it so
+      // the next turn doesn't send two consecutive `user` messages, which some
+      // APIs reject outright.
+      if (messages.at(-1) === userMessage) {
+        messages.pop();
+      }
     }
   } finally {
     rl.close();
