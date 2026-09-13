@@ -56,6 +56,13 @@ test("usage from the final SSE frame becomes a usage chunk", async () => {
   expect(out).toEqual([{ usage: { promptTokens: 100, completionTokens: 20 } }]);
 });
 
+test("a null usage field on a delta frame is ignored, not a crash", async () => {
+  const payload = JSON.stringify({ choices: [{ delta: { content: "hi" } }], usage: null });
+  const out = [];
+  for await (const c of chunksFromSSE(sse([payload]))) out.push(c);
+  expect(out).toEqual([{ text: "hi" }]);
+});
+
 test("malformed JSON is skipped rather than crashing the stream", async () => {
   const out = [];
   for await (const c of chunksFromSSE(

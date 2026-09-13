@@ -17,14 +17,14 @@ import type { Transport, StreamChunk } from "./loop.ts";
 interface StreamDeltaToolCall {
   index: number;
   id?: string;
-  function?: { name?: string; arguments?: string };
+  function?: { name?: string; arguments?: string } | null;
 }
 
 interface StreamChoice {
   delta?: {
-    content?: string;
-    tool_calls?: StreamDeltaToolCall[];
-  };
+    content?: string | null;
+    tool_calls?: (StreamDeltaToolCall | null)[] | null;
+  } | null;
 }
 
 interface StreamUsage {
@@ -33,18 +33,25 @@ interface StreamUsage {
 }
 
 interface StreamPayload {
-  choices?: StreamChoice[];
+  choices?: (StreamChoice | null)[] | null;
   /**
-   * Present only on the final frame, and only when the request set
-   * `stream_options: { include_usage: true }`. `choices` is empty on that frame.
+   * DashScope sends `usage: null` on every intermediate delta frame once
+   * `stream_options.include_usage` is set, and populates it only on the
+   * final, choice-less frame. Typed nullable so every read site has to
+   * account for that rather than dereferencing a frame that hasn't arrived
+   * yet — `payload.usage !== undefined` let a `null` frame straight through
+   * and crashed the stream on the very first delta of every live turn.
    */
-  usage?: StreamUsage;
+  usage?: StreamUsage | null;
 }
 
 /**
  * Turn raw SSE `data:` payloads into `StreamChunk`s. Stops at `[DONE]`;
  * silently skips a payload that isn't valid JSON rather than ending the
- * stream over one bad chunk.
+ * stream over one bad chunk. Every field read off a parsed payload is
+ * guarded for truthiness (not `!== undefined`) because DashScope sends
+ * explicit `null` — not just omission — for fields that haven't arrived yet
+ * on a given frame.
  */
 export async function* chunksFromSSE(
   events: AsyncIterable<{ data: string }>,
@@ -60,14 +67,16 @@ export async function* chunksFromSSE(
     }
 
     for (const choice of payload.choices ?? []) {
+      if (!choice) continue;
       const delta = choice.delta;
       if (!delta) continue;
 
-      if (delta.content !== undefined) {
+      if (delta.content) {
         yield { text: delta.content };
       }
 
       for (const toolCall of delta.tool_calls ?? []) {
+        if (!toolCall) continue;
         yield {
           toolCall: {
             index: toolCall.index,
@@ -79,7 +88,7 @@ export async function* chunksFromSSE(
       }
     }
 
-    if (payload.usage !== undefined) {
+    if (payload.usage) {
       yield {
         usage: {
           promptTokens: payload.usage.prompt_tokens,
