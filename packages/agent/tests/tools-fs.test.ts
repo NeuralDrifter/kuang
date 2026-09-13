@@ -76,6 +76,43 @@ test("grep reports file and line for matches", async () => {
   expect(out).toContain("src/b.ts:1");
 });
 
+test("edit_file writes the replacement literally, not as a regex template", async () => {
+  const root = sandbox();
+  await tool(root, "edit_file").run({ path: "src/a.ts", old: "a = 1", new: "a = $& $1 done" });
+  expect(readFileSync(join(root, "src", "a.ts"), "utf-8")).toBe("export const a = $& $1 done;\n");
+});
+
+test("glob matches the patterns a model actually writes", async () => {
+  const root = sandbox();
+  writeFileSync(join(root, "top.ts"), "x\n", "utf-8");
+  const g = tool(root, "glob");
+
+  expect((await g.run({ pattern: "**/*.ts" })).split("\n").sort()).toEqual([
+    "src/a.ts",
+    "src/b.ts",
+    "top.ts",
+  ]);
+  expect((await g.run({ pattern: "src/**/*.ts" })).split("\n").sort()).toEqual([
+    "src/a.ts",
+    "src/b.ts",
+  ]);
+  expect((await g.run({ pattern: "src/?.ts" })).split("\n").sort()).toEqual([
+    "src/a.ts",
+    "src/b.ts",
+  ]);
+});
+
+test("grep skips binary and oversized files and caps its output", async () => {
+  const root = sandbox();
+  writeFileSync(join(root, "bin.dat"), Buffer.from([0x00, 0x61, 0x00, 0x62]));
+  writeFileSync(join(root, "big.txt"), "a\n".repeat(600_000), "utf-8");
+
+  const out = await tool(root, "grep").run({ pattern: "a" });
+  expect(out).not.toContain("bin.dat");
+  expect(out).not.toContain("big.txt");
+  expect(out.split("\n").length).toBeLessThanOrEqual(201);
+});
+
 test("read and search tools are auto-approved; writes ask", () => {
   const root = sandbox();
   expect(tool(root, "read_file").tier).toBe("auto");

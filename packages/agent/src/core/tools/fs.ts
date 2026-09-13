@@ -10,12 +10,11 @@
  * `ask` and show a unified diff before running, not after; `read_file`,
  * `glob` and `grep` are tier `auto`.
  */
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, stat, writeFile } from "node:fs/promises";
 import { readdirSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import type { Tool } from "./registry.ts";
 import type { ToolPreview } from "../events.ts";
-import { matchesPattern } from "../approvals.ts";
 
 /** Resolve a project-relative path against `root`, refusing any escape. */
 function resolveInProject(root: string, path: string): string {
@@ -44,6 +43,70 @@ function unifiedDiff(before: string, after: string, path: string): string {
     if (b[i] !== undefined) lines.push(`+${b[i]}`);
   }
   return lines.join("\n");
+}
+
+const REGEX_SPECIAL = /[.*+?^${}()|[\]\\]/;
+
+// Translate a glob pattern into an anchored RegExp, in one pass so a doubled
+// star is consumed before a single star can match its first character.
+// `matchesPattern` in ../approvals.ts is deliberately not reused here: it
+// requires a doubled star to cross at least one directory boundary, which is
+// right for approval rules but wrong for the patterns a model actually
+// writes — a leading doubled-star glob segment, or one nested under a
+// directory, would silently under-match.
+//  - a doubled star immediately followed by a slash also matches zero
+//    directories (so the slash after it is optional)
+//  - a doubled star alone matches anything, including slashes
+//  - a single star matches anything within one path segment
+//  - a question mark matches exactly one character within one path segment
+//  - every other regex metacharacter is escaped
+function globToRegExp(pattern: string): RegExp {
+  let source = "^";
+  for (let i = 0; i < pattern.length; ) {
+    if (pattern.startsWith("**/", i)) {
+      source += "(?:.*/)?";
+      i += 3;
+    } else if (pattern.startsWith("**", i)) {
+      source += ".*";
+      i += 2;
+    } else if (pattern[i] === "*") {
+      source += "[^/]*";
+      i += 1;
+    } else if (pattern[i] === "?") {
+      source += "[^/]";
+      i += 1;
+    } else {
+      const ch = pattern[i];
+      source += REGEX_SPECIAL.test(ch) ? `\\${ch}` : ch;
+      i += 1;
+    }
+  }
+  source += "$";
+  return new RegExp(source);
+}
+
+/** Files above this size are skipped by `grep` rather than loaded whole. */
+const MAX_GREP_FILE_BYTES = 1024 * 1024;
+/** How many leading bytes `grep` probes for a NUL byte to detect binaries. */
+const BINARY_PROBE_BYTES = 4096;
+/** `grep` stops collecting matches after this many lines. */
+const MAX_GREP_MATCHES = 200;
+
+/**
+ * Whether a file looks binary, by checking its first `BINARY_PROBE_BYTES`
+ * bytes for a NUL byte. Node's UTF-8 decoder substitutes U+FFFD for invalid
+ * bytes rather than throwing, so a try/catch around `readFile` cannot detect
+ * this — the probe has to look at the raw bytes.
+ */
+async function isProbablyBinary(abs: string): Promise<boolean> {
+  const handle = await open(abs, "r");
+  try {
+    const buf = Buffer.alloc(BINARY_PROBE_BYTES);
+    const { bytesRead } = await handle.read(buf, 0, BINARY_PROBE_BYTES, 0);
+    return buf.subarray(0, bytesRead).includes(0);
+  } finally {
+    await handle.close();
+  }
 }
 
 /** Recursively list every file under `dir`, as project-relative forward-slash paths. */
@@ -146,7 +209,12 @@ function editFileTool(root: string): Tool {
     if (occurrences !== 1) {
       throw new Error(`Found ${occurrences} times; the match must be unique.`);
     }
-    const after = before.replace(oldStr, newStr);
+    // Splice by index rather than `before.replace(oldStr, newStr)`: a string
+    // second argument to String.replace is a template where `$&`, `` $` ``,
+    // `$'` and `$1` expand, so a model-supplied `new` would be silently
+    // reinterpreted instead of written literally.
+    const index = before.indexOf(oldStr);
+    const after = before.slice(0, index) + newStr + before.slice(index + oldStr.length);
     return { path, abs, before, after };
   }
 
@@ -196,9 +264,10 @@ function globTool(root: string): Tool {
     },
     run: async (args) => {
       const pattern = String(args.pattern);
+      const regex = globToRegExp(pattern);
       const resolvedRoot = resolve(root);
       const all = walk(resolvedRoot, resolvedRoot);
-      return all.filter((p) => matchesPattern(pattern, p)).join("\n");
+      return all.filter((p) => regex.test(p)).join("\n");
     },
   };
 }
@@ -208,8 +277,13 @@ function grepTool(root: string): Tool {
     name: "grep",
     tier: "auto",
     description: {
-      "en-US": "Search project files for a pattern, optionally scoped by a glob",
-      "zh-CN": "在项目文件中搜索匹配内容,可通过 glob 限定范围",
+      "en-US":
+        "Search project files for a literal substring (not a regular expression), " +
+        "optionally scoped by a glob. Skips binary and oversized (>1MB) files and " +
+        "caps output at 200 matching lines.",
+      "zh-CN":
+        "在项目文件中搜索一个字面子串(非正则表达式),可通过 glob 限定范围。" +
+        "会跳过二进制文件和超过 1MB 的大文件,并将输出限制在 200 行匹配以内。",
     },
     parameters: {
       type: "object",
@@ -222,13 +296,26 @@ function grepTool(root: string): Tool {
     run: async (args) => {
       const pattern = String(args.pattern);
       const globPattern = typeof args.glob === "string" ? args.glob : undefined;
+      const globRegex = globPattern === undefined ? undefined : globToRegExp(globPattern);
       const resolvedRoot = resolve(root);
       const files = walk(resolvedRoot, resolvedRoot).filter(
-        (p) => globPattern === undefined || matchesPattern(globPattern, p),
+        (p) => globRegex === undefined || globRegex.test(p),
       );
       const matches: string[] = [];
+      let truncated = false;
       for (const relPath of files) {
+        if (truncated) break;
         const abs = join(resolvedRoot, relPath);
+
+        let fileInfo;
+        try {
+          fileInfo = await stat(abs);
+        } catch {
+          continue;
+        }
+        if (fileInfo.size > MAX_GREP_FILE_BYTES) continue;
+        if (await isProbablyBinary(abs)) continue;
+
         let text: string;
         try {
           text = await readFile(abs, "utf-8");
@@ -237,10 +324,16 @@ function grepTool(root: string): Tool {
         }
         const lines = text.split("\n");
         for (let i = 0; i < lines.length; i++) {
-          if (lines[i].includes(pattern)) {
-            matches.push(`${relPath}:${i + 1}: ${lines[i]}`);
+          if (!lines[i].includes(pattern)) continue;
+          if (matches.length >= MAX_GREP_MATCHES) {
+            truncated = true;
+            break;
           }
+          matches.push(`${relPath}:${i + 1}: ${lines[i]}`);
         }
+      }
+      if (truncated) {
+        matches.push(`(output truncated at ${MAX_GREP_MATCHES} matching lines)`);
       }
       return matches.join("\n");
     },
