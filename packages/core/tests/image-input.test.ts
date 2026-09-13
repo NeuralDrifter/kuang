@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Modified 2026 by Michael P. Burgus <https://github.com/NeuralDrifter>
+// Original: bailian-cli, Copyright 2026 Aliyun Model Studio (DashScope) AI Platform
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

@@ -22,7 +22,18 @@ export function isCovered(path) {
   const p = path.replaceAll("\\", "/");
   if (!/\.(ts|mts|cts|tsx|js|mjs|cjs|jsx)$/.test(p)) return false;
   if (p.includes("/node_modules/") || p.includes("/dist/")) return false;
-  return p.startsWith("packages/agent/") || p.startsWith("tools/");
+  if (p.startsWith("packages/agent/") || p.startsWith("tools/")) return true;
+  const explicit = [
+    "packages/commands/src/commands/agent/index.ts",
+    "packages/commands/src/index.ts",
+    "packages/commands/tests/sandbox.test.ts",
+    "packages/core/src/config/loader.ts",
+    "packages/core/src/config/schema.ts",
+    "packages/core/tests/image-input.test.ts",
+    "packages/core/tests/index.test.ts",
+    "packages/core/tests/mcp.test.ts",
+  ];
+  return explicit.includes(p);
 }
 
 import { readFileSync } from "node:fs";

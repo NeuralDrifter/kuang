@@ -14,6 +14,9 @@ export default defineCommand({
   usageArgs: "[flags]",
   flags: {},
   async run(ctx) {
+    if (ctx.settings.dryRun) {
+      throw new Error("The interactive agent does not support --dry-run.");
+    }
     await runAgent(ctx);
   },
 });

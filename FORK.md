@@ -14,8 +14,8 @@ This file records divergence from upstream, as required by Apache-2.0 §4(b).
 |         | Upstream        | Kuang         |
 | ------- | --------------- | ------------- |
 | Binary  | `bl`, `bailian` | `kuang`       |
-| Package | `bailian-cli`   | `kuang`       |
-| Version | 1.24.0          | 0.1.x (reset) |
+| Package | `bailian-cli`   | `bailian-cli` |
+| Version | 1.24.0          | 1.24.0        |
 
 Internal libraries (`bailian-cli-core`, `bailian-cli-runtime`,
 `bailian-cli-commands`, `knowledge-studio-cli`) keep their upstream names. They

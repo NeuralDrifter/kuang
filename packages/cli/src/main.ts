@@ -14,7 +14,7 @@ const quickStartTasks = [
 void createCli(
   { ...commands, ...commandAliases },
   {
-    binName: "bl",
+    binName: "kuang",
     version: pkg.version,
     clientName: "bailian-cli",
     npmPackage: "bailian-cli",

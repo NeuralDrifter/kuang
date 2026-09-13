@@ -141,15 +141,18 @@ async function resolveCall(call: ToolCall, options: LoopOptions): Promise<AgentM
     args = JSON.parse(call.arguments) as Record<string, unknown>;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return refuse(
-      `Invalid JSON arguments: ${message}`,
-      `Could not parse arguments as JSON: ${message}`,
-    );
+    const summary =
+      options.language === "zh-CN"
+        ? `无效的 JSON 参数: ${message}`
+        : `Invalid JSON arguments: ${message}`;
+    return refuse(summary, `Could not parse arguments as JSON: ${message}`);
   }
 
   const tool = tools.get(call.name);
   if (!tool) {
-    return refuse(`Unknown tool: ${call.name}`, `Unknown tool: ${call.name}`);
+    const summary =
+      options.language === "zh-CN" ? `未知工具: ${call.name}` : `Unknown tool: ${call.name}`;
+    return refuse(summary, `Unknown tool: ${call.name}`);
   }
 
   const runAndReport = async (): Promise<AgentMessage> => {
@@ -165,7 +168,8 @@ async function resolveCall(call: ToolCall, options: LoopOptions): Promise<AgentM
   };
 
   if (tool.tier === "never") {
-    return refuse("Not permitted", "This tool is not permitted.");
+    const summary = options.language === "zh-CN" ? "不允许使用" : "Not permitted";
+    return refuse(summary, "This tool is not permitted.");
   }
 
   if (tool.tier === "auto") {
@@ -179,10 +183,22 @@ async function resolveCall(call: ToolCall, options: LoopOptions): Promise<AgentM
 
   const preview = await previewFor(tool, call, args);
   sink({ type: "tool_approval_required", call, preview });
-  const decision = await ask(call, preview);
+
+  let decision: ApprovalDecision;
+  try {
+    decision = await ask(call, preview);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const summary =
+      options.language === "zh-CN"
+        ? `授权提示失败: ${message}`
+        : `Approval prompt failed: ${message}`;
+    return refuse(summary, `Approval prompt failed: ${message}`);
+  }
 
   if (decision === "deny") {
-    return refuse("Denied by the user", "Denied by the user.");
+    const summary = options.language === "zh-CN" ? "用户拒绝" : "Denied by the user";
+    return refuse(summary, "Denied by the user.");
   }
   if (decision === "allow_always") {
     approvals.allowAlways(call.name, args);
