@@ -136,3 +136,77 @@ test("read and search tools are auto-approved; writes ask", () => {
   expect(tool(root, "write_file").tier).toBe("ask");
   expect(tool(root, "edit_file").tier).toBe("ask");
 });
+
+// ── directories are visible ─────────────────────────────────────────────────
+
+test("glob lists directories, not only files", async () => {
+  const root = sandbox();
+  mkdirSync(join(root, "docs"), { recursive: true });
+  mkdirSync(join(root, "tools"), { recursive: true });
+
+  const out = (await tool(root, "glob").run({ pattern: "*" })).split("\n");
+
+  // Answering "what folders are here?" with silence is worse than an error:
+  // the model reports confidently that there are none.
+  expect(out).toContain("docs");
+  expect(out).toContain("tools");
+});
+
+test("a trailing slash matches directories only", async () => {
+  const root = sandbox();
+  mkdirSync(join(root, "docs"), { recursive: true });
+  writeFileSync(join(root, "top.ts"), "x\n", "utf-8");
+
+  const out = (await tool(root, "glob").run({ pattern: "*/" })).split("\n").filter(Boolean);
+
+  // The sandbox already contains src/, so both root directories match.
+  expect(out.sort()).toEqual(["docs", "src"]);
+  expect(out).not.toContain("top.ts");
+});
+
+test("nested directories are listed under a recursive pattern", async () => {
+  const root = sandbox();
+  mkdirSync(join(root, "a", "b"), { recursive: true });
+
+  const out = (await tool(root, "glob").run({ pattern: "**/" })).split("\n").filter(Boolean);
+
+  expect(out).toContain("a");
+  expect(out).toContain("a/b");
+});
+
+// ── secrets ─────────────────────────────────────────────────────────────────
+
+test("read_file refuses secret-bearing files", async () => {
+  const root = sandbox();
+  writeFileSync(join(root, ".env"), "API_KEY=sk-real-secret\n", "utf-8");
+
+  // read_file is auto-tier: without this guard the agent reads the user's
+  // credentials and ships them to the API with no prompt at all.
+  await expect(tool(root, "read_file").run({ path: ".env" })).rejects.toThrow(/sensitive/i);
+});
+
+test("the secret guard covers the usual credential files", async () => {
+  const root = sandbox();
+  for (const name of [".env", ".env.local", "id_rsa", "server.pem", "app.key", ".npmrc"]) {
+    writeFileSync(join(root, name), "secret\n", "utf-8");
+    await expect(tool(root, "read_file").run({ path: name })).rejects.toThrow(/sensitive/i);
+  }
+});
+
+test("ordinary files that merely look similar are still readable", async () => {
+  const root = sandbox();
+  writeFileSync(join(root, "env.ts"), "export const x = 1;\n", "utf-8");
+  writeFileSync(join(root, "keyboard.ts"), "export const y = 2;\n", "utf-8");
+
+  expect(await tool(root, "read_file").run({ path: "env.ts" })).toContain("export const x");
+  expect(await tool(root, "read_file").run({ path: "keyboard.ts" })).toContain("export const y");
+});
+
+test("secret files are hidden from glob and grep", async () => {
+  const root = sandbox();
+  writeFileSync(join(root, ".env"), "API_KEY=sk-real-secret\n", "utf-8");
+
+  expect(await tool(root, "glob").run({ pattern: "*" })).not.toContain(".env");
+  // grep must not leak the contents either.
+  expect(await tool(root, "grep").run({ pattern: "sk-real" })).not.toContain("sk-real-secret");
+});

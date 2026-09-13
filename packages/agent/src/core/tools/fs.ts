@@ -117,16 +117,54 @@ async function isProbablyBinary(abs: string): Promise<boolean> {
   }
 }
 
-/** Recursively list every file under `dir`, as project-relative forward-slash paths. */
-function walk(root: string, dir: string): string[] {
-  const out: string[] = [];
+/**
+ * Files whose contents are secrets. `read_file` is auto-tier — it runs with no
+ * approval — so without this guard the agent can read a project's credentials
+ * and send them to the API before the user ever sees a prompt. They are also
+ * withheld from `glob` and `grep`, so their existence and contents never reach
+ * the model at all.
+ *
+ * Matched on the basename, anchored, so `env.ts` and `keyboard.ts` stay
+ * readable.
+ */
+const SECRET_FILES = [
+  /^\.env(\..+)?$/i,
+  /^\.npmrc$/i,
+  /^\.netrc$/i,
+  /^id_(rsa|dsa|ecdsa|ed25519)(\.pub)?$/i,
+  /^credentials$/i,
+  /\.(pem|key|p12|pfx|keystore)$/i,
+];
+
+/** Whether this path's basename names a secret-bearing file. */
+export function isSecretFile(path: string): boolean {
+  const name = path.replaceAll("\\", "/").split("/").pop() ?? "";
+  return SECRET_FILES.some((re) => re.test(name));
+}
+
+/** One entry found by the walk. */
+interface Entry {
+  /** Project-relative, forward slashes, no trailing slash. */
+  path: string;
+  isDir: boolean;
+}
+
+/**
+ * Recursively list everything under `dir`. Directories are included: a model
+ * asked "what folders are here?" and told nothing will confidently answer that
+ * there are none.
+ */
+function walk(root: string, dir: string): Entry[] {
+  const out: Entry[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const abs = join(dir, entry.name);
     if (entry.isDirectory()) {
       if (entry.name === "node_modules" || entry.name === ".git") continue;
+      out.push({ path: toRelative(root, abs), isDir: true });
       out.push(...walk(root, abs));
     } else if (entry.isFile()) {
-      out.push(toRelative(root, abs));
+      if (isSecretFile(entry.name)) continue;
+      out.push({ path: toRelative(root, abs), isDir: false });
     }
   }
   return out;
@@ -145,6 +183,9 @@ function readFileTool(root: string): Tool {
     run: async (args) => {
       const path = String(args.path);
       const abs = resolveInProject(root, path);
+      if (isSecretFile(path)) {
+        throw new Error(`Refusing to read a sensitive file: ${path}`);
+      }
       return readFile(abs, "utf-8");
     },
   };
@@ -271,11 +312,16 @@ function globTool(root: string): Tool {
       required: ["pattern"],
     },
     run: async (args) => {
-      const pattern = String(args.pattern);
-      const regex = globToRegExp(pattern);
+      const raw = String(args.pattern);
+      // A trailing slash means directories only, the way a shell glob does.
+      const dirsOnly = raw.endsWith("/");
+      const regex = globToRegExp(dirsOnly ? raw.slice(0, -1) : raw);
       const resolvedRoot = resolve(root);
-      const all = walk(resolvedRoot, resolvedRoot);
-      return all.filter((p) => regex.test(p)).join("\n");
+
+      return walk(resolvedRoot, resolvedRoot)
+        .filter((e) => (dirsOnly ? e.isDir : true) && regex.test(e.path))
+        .map((e) => e.path)
+        .join("\n");
     },
   };
 }
@@ -306,9 +352,9 @@ function grepTool(root: string): Tool {
       const globPattern = typeof args.glob === "string" ? args.glob : undefined;
       const globRegex = globPattern === undefined ? undefined : globToRegExp(globPattern);
       const resolvedRoot = resolve(root);
-      const files = walk(resolvedRoot, resolvedRoot).filter(
-        (p) => globRegex === undefined || globRegex.test(p),
-      );
+      const files = walk(resolvedRoot, resolvedRoot)
+        .filter((e) => !e.isDir && (globRegex === undefined || globRegex.test(e.path)))
+        .map((e) => e.path);
       const matches: string[] = [];
       let truncated = false;
       for (const relPath of files) {
