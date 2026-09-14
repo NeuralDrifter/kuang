@@ -3,8 +3,13 @@
 Everything currently known to be wrong, incomplete or unverified. Each entry
 says what it is, why it matters, and what fixing it looks like.
 
-Verified against `ab888db` on 2026-09-13. Nothing here is a surprise — these
-were found during development and deliberately deferred rather than missed.
+**This is a running record.** Add to it whenever something is found and not
+fixed on the spot; move entries to _Fixed_ rather than deleting them, so the
+history of what went wrong stays readable.
+
+Last reviewed against `af517ec` on 2026-09-13. Nothing here is a surprise —
+these were found during development and deliberately deferred rather than
+missed.
 
 ---
 
@@ -36,7 +41,25 @@ always prompt, every time.
 > persistence, never after it.** The moment rules survive a restart, the
 > containment above disappears.
 
-### 1.2 Symlinks are followed out of the project
+### 1.2 The shell tool bypasses the secret-file guard
+
+**Where:** `packages/agent/src/core/tools/shell.ts`
+
+`read_file` refuses `.env`, ssh keys, `.pem` and friends, and `glob`/`grep`
+withhold them. The shell tool honours none of that: `cat .env`,
+`Get-Content .env` or `type .env` returns the contents straight to the model.
+
+It is `ask`-tier, so the user does approve it — but the approval prompt shows a
+command line, and `cat .env` looks innocuous next to the dozen other commands
+being approved in a session.
+
+**Fix options, in order of preference:** run the redaction vault over shell
+output once it is wired (which solves this and the general case together);
+or refuse shell commands whose text names a secret file, which is easy to
+evade and therefore mostly theatre; or surface the risk in the approval
+preview.
+
+### 1.3 Symlinks are followed out of the project
 
 **Where:** `packages/agent/src/core/tools/fs.ts`, `resolveInProject`
 
@@ -75,7 +98,33 @@ POSIX a backslash is a **legal filename character**, so a file genuinely named
 `a\b.ts` is treated as `a/b.ts`. Fails closed (re-prompts), so it is a
 usability wart rather than a hole.
 
-### 2.3 Interpreter probing accepts binaries that cannot be spawned
+### 2.3 write_file and edit_file do not check the secret list
+
+**Where:** `packages/agent/src/core/tools/fs.ts`
+
+Only `read_file` consults `isSecretFile`. The agent can therefore overwrite
+`.env` or an ssh key. Both are `ask`-tier so nothing happens without approval,
+and writing to `.env` is sometimes legitimate — but the diff preview shows the
+file being clobbered without flagging what it is.
+
+**Fix:** keep the write allowed, but mark it in the preview.
+
+### 2.4 CN_MOBILE has no checksum to lean on
+
+**Where:** `packages/agent/src/core/redact/rules.ts`
+
+Every other identifier rule validates a checksum. Chinese mobile numbers have
+none, so the rule rests on boundary conditions alone: eleven digits starting
+`1[3-9]`, not adjacent to another digit. A data file or log full of eleven-digit
+identifiers will trip it. It survives the source-corpus regression test, but
+that corpus is TypeScript.
+
+**Fix if it proves noisy:** restrict to the allocated prefix ranges — `154`,
+`160`/`161`/`163`, `179`, `192`/`194` are not issued — which costs no recall and
+removes roughly a fifth of the space. Requiring separators is _not_ the answer
+here: Chinese mobiles are written unseparated, so it would gut recall.
+
+### 2.5 Interpreter probing accepts binaries that cannot be spawned
 
 **Where:** `packages/agent/src/core/tools/shell.ts`, `probeInterpreters`
 
@@ -113,7 +162,17 @@ a file actually lands in the project, and confirm the tool returns its path.
 Approval prompts cannot be answered through a pipe — EOF is correctly treated
 as deny — so this has to be done by hand.
 
-### 3.2 Localization is not complete
+### 3.2 The redaction vault is built but not wired
+
+The validators, rules, vault and stream restorer exist and are tested. Nothing
+calls them yet — the loop does not sanitize, and there is no `--redact` flag or
+`/pii` command. Until that lands none of the protection is active, and the
+secret-file denylist is the only thing between the model and a credential.
+
+Tracked in [design/stage-3-redaction.md](design/stage-3-redaction.md), tasks 5
+through 7.
+
+### 3.3 Localization is not complete
 
 UI labels and tool descriptions are localized; some payload strings inside them
 are not, so a zh-CN user can see a Chinese prompt followed by an English
@@ -204,3 +263,20 @@ These are choices, recorded so they are not mistaken for oversights.
   matched ordinary source code and were applied to tool _results_, so every file
   the agent read came back corrupted. A precise, input-only, opt-in replacement
   is future work.
+
+---
+
+## 7. Fixed
+
+Kept rather than deleted, so the record shows what went wrong and when.
+
+| Found      | Issue                                                                                                                            | Fixed in  |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 2026-09-13 | `glob` emitted only files, so the agent reported "there are no subdirectories" when there were six                               | `92e3244` |
+| 2026-09-13 | `.env` was readable by the auto-tier `read_file`, with no prompt                                                                 | `92e3244` |
+| 2026-09-13 | `arguments: null` on trailing tool-call frames appended the text "null" to the model's JSON, breaking the call                   | `42093ac` |
+| 2026-09-13 | `video generate --download` was forced as a bare switch; the real flag needs a path, so every video generation would have failed | `15523b9` |
+| 2026-09-13 | `speech synthesize` requires `--voice` via cross-flag validation, invisible to the schema generator                              | `15523b9` |
+| 2026-09-13 | `usage: null` on delta frames crashed the stream one character into every reply                                                  | `109eb9f` |
+| 2026-09-13 | A repeated-digit run passes Luhn, so `0000000000000000` was read as a card number                                                | `c0d989d` |
+| 2026-09-12 | 35 formatting issues in generated skill references; resolved incidentally when the formatted state was committed                 | —         |
