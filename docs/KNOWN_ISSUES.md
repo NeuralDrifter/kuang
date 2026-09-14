@@ -7,7 +7,7 @@ says what it is, why it matters, and what fixing it looks like.
 fixed on the spot; move entries to _Fixed_ rather than deleting them, so the
 history of what went wrong stays readable.
 
-Last reviewed against `6b92159` on 2026-09-13. Nothing here is a surprise —
+Last reviewed against `d57f22d` on 2026-09-14. Nothing here is a surprise —
 these were found during development and deliberately deferred rather than
 missed.
 
@@ -276,10 +276,12 @@ These are choices, recorded so they are not mistaken for oversights.
 - **Internal libraries keep their upstream names** (`bailian-cli-core`,
   `-runtime`, `-commands`). They are workspace-linked and never installed
   standalone.
-- **PII redaction was removed, not ported.** The inherited prototype's rules
+- **PII redaction was rewritten, not ported.** The inherited prototype's rules
   matched ordinary source code and were applied to tool _results_, so every file
-  the agent read came back corrupted. A precise, input-only, opt-in replacement
-  is future work.
+  the agent read came back corrupted. The replacement shares nothing with it but
+  the stream-buffering idea: checksum-validated rules, a single sanitize point on
+  the request, and restoration on the way out. Shipped in Stage 3; see
+  [design/stage-3-redaction.md](design/stage-3-redaction.md).
 
 ---
 
