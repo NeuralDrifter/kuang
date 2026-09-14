@@ -7,28 +7,28 @@ Index: [index.md](index.md)
 
 ## Commands in this group
 
-| Command    | Authentication | Description                  |
-| ---------- | -------------- | ---------------------------- |
-| `bl agent` | API Key        | Launch the interactive agent |
+| Command | Authentication | Description |
+| --- | --- | --- |
+| `bl agent` | API Key | Launch the interactive agent |
 
 ## Command details
 
 ### `bl agent`
 
-| Field              | Value                        |
-| ------------------ | ---------------------------- |
-| **Name**           | `agent`                      |
-| **Description**    | Launch the interactive agent |
-| **Authentication** | API Key                      |
-| **Usage**          | `bl agent [flags]`           |
+| Field | Value |
+| --- | --- |
+| **Name** | `agent` |
+| **Description** | Launch the interactive agent |
+| **Authentication** | API Key |
+| **Usage** | `bl agent [flags]` |
 
 #### Flags
 
-| Flag               | Type   | Required | Description                                                      |
-| ------------------ | ------ | -------- | ---------------------------------------------------------------- |
-| `--redact`         | switch | no       | Hide secrets and personal data from the model (toggle with /pii) |
-| `--api-key <key>`  | string | no       | API key                                                          |
-| `--base-url <url>` | string | no       | API base URL                                                     |
+| Flag | Type | Required | Description |
+| --- | --- | --- | --- |
+| `--redact` | switch | no | Hide secrets and personal data from the model (toggle with /pii) |
+| `--api-key <key>` | string | no | API key |
+| `--base-url <url>` | string | no | API base URL |
 
 #### Examples
 
