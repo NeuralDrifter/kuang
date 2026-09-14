@@ -41,6 +41,13 @@ always prompt, every time.
 > persistence, never after it.** The moment rules survive a restart, the
 > containment above disappears.
 
+Planned as Task 2 of
+[design/stage-4-persistence.md](design/stage-4-persistence.md), which also
+found a sharper fix than a denylist alone: a two-word pattern whose second word
+is an option (`rm -f*`, `git --no-pager*`) has captured no verb, so it should
+derive nothing at all. That drops exactly the dangerous shape while keeping
+`pnpm test*` and `git status*` useful.
+
 ## 2. Correctness
 
 ### 2.1 `~` is not treated as shell chaining
