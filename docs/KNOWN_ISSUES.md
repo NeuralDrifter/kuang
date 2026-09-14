@@ -164,18 +164,21 @@ a file actually lands in the project, and confirm the tool returns its path.
 Approval prompts cannot be answered through a pipe — EOF is correctly treated
 as deny — so this has to be done by hand.
 
-### 3.2 Redaction has never run against a live model
+### 3.2 Redaction is verified on one model and one shape of task
 
-The vault is wired into the loop and driven by `/pii`, and the unit tests cover
-the boundary with a scripted transport. What has not happened is a real
-conversation with real secrets in it: whether Qwen actually copies a
-`[REDACTED_CARD_1]` through a tool argument unchanged, rather than paraphrasing
-it, reformatting it, or objecting to it, is a property of the model and cannot
-be asserted in a test.
+A live run against `qwen-max` confirmed the whole round-trip: the card was
+withheld, the model copied `[REDACTED_CARD_1]` through a `write_file` argument
+unchanged, the approval diff showed the real digits, and the real digits landed
+in the file. The model never saw them.
 
-**Check before relying on it:** whether the model preserves placeholders
-verbatim in tool arguments, and whether it follows the system prompt's
-instruction to say it cannot read one instead of guessing.
+That is one model, one rule and one tool. Whether other models — and especially
+smaller ones — preserve a placeholder rather than paraphrasing, reformatting or
+objecting to it is unverified, and it is a property of the model rather than
+something a test here can assert.
+
+**Check before relying on it:** placeholder fidelity on whichever model you
+actually run, and whether it follows the system prompt's instruction to say it
+cannot read a value instead of guessing.
 
 ### 3.3 Localization is not complete
 
@@ -232,7 +235,27 @@ in the working tree and you have to `git restore skills/` afterwards.
 **Fix:** either stage the regenerated files inside the hook, or stop formatting
 files the hook cannot stage. One line either way.
 
-### 5.2 Header check would block edits to inherited `tools/` files
+### 5.2 The inherited test suite is red on Windows
+
+`npx vp test --run` at the repo root reports roughly 80 failures across 31
+files. **None are in `packages/agent`**, which is green at 229. They fall into
+three groups, all inherited:
+
+| Group                                                        | Cause                                                                     |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `e2e/*` against DashScope — video, speech, quota, permission | Needs live API access and media credits                                   |
+| `config-agent-writers.test.ts` (20)                          | Isolates by setting `HOME`; `os.homedir()` reads `USERPROFILE` on Windows |
+| File-permission and symlink assertions                       | `expected 438 to be 416` — POSIX modes do not exist on Windows            |
+| `knowledge-upload-support.test.ts`                           | Path separator assumptions in a recursive directory walk                  |
+
+Worth knowing before trusting a red root run: the agent's own suite is the one
+that says whether this fork's code works.
+
+**Fix:** the `HOME` group should set both variables, as the e2e helpers now do.
+The permission and path groups want either Windows-aware assertions or a skip
+guard, not a fix to the code they test.
+
+### 5.3 Header check would block edits to inherited `tools/` files
 
 **Where:** `tools/check-headers.mjs`, `isCovered`
 
@@ -240,7 +263,7 @@ Coverage claims all of `tools/**`, but 22 inherited files there have no header.
 Nothing fails today because none of them have been touched — the first edit to
 e.g. `tools/generate-reference.ts` will demand a header nobody expects.
 
-### 5.3 Minor hook and checker warts
+### 5.4 Minor hook and checker warts
 
 - `.vite-hooks/pre-commit` uses an unquoted `$(git diff --cached …)`, so it
   word-splits on filenames containing spaces.
@@ -275,13 +298,14 @@ These are choices, recorded so they are not mistaken for oversights.
 
 Kept rather than deleted, so the record shows what went wrong and when.
 
-| Found      | Issue                                                                                                                            | Fixed in  |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| 2026-09-13 | `glob` emitted only files, so the agent reported "there are no subdirectories" when there were six                               | `92e3244` |
-| 2026-09-13 | `.env` was readable by the auto-tier `read_file`, with no prompt                                                                 | `92e3244` |
-| 2026-09-13 | `arguments: null` on trailing tool-call frames appended the text "null" to the model's JSON, breaking the call                   | `42093ac` |
-| 2026-09-13 | `video generate --download` was forced as a bare switch; the real flag needs a path, so every video generation would have failed | `15523b9` |
-| 2026-09-13 | `speech synthesize` requires `--voice` via cross-flag validation, invisible to the schema generator                              | `15523b9` |
-| 2026-09-13 | `usage: null` on delta frames crashed the stream one character into every reply                                                  | `109eb9f` |
-| 2026-09-13 | A repeated-digit run passes Luhn, so `0000000000000000` was read as a card number                                                | `c0d989d` |
-| 2026-09-12 | 35 formatting issues in generated skill references; resolved incidentally when the formatted state was committed                 | —         |
+| Found      | Issue                                                                                                                                                                                                                                                | Fixed in  |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 2026-09-13 | `config.e2e.test.ts` set only `HOME` to isolate the child CLI, so on Windows it wrote agent configs into the developer's real home directory — it overwrote `~/.codex/config.toml`, `~/.codex/auth.json` and `~/.hermes/config.yaml` on this machine | pending   |
+| 2026-09-13 | `glob` emitted only files, so the agent reported "there are no subdirectories" when there were six                                                                                                                                                   | `92e3244` |
+| 2026-09-13 | `.env` was readable by the auto-tier `read_file`, with no prompt                                                                                                                                                                                     | `92e3244` |
+| 2026-09-13 | `arguments: null` on trailing tool-call frames appended the text "null" to the model's JSON, breaking the call                                                                                                                                       | `42093ac` |
+| 2026-09-13 | `video generate --download` was forced as a bare switch; the real flag needs a path, so every video generation would have failed                                                                                                                     | `15523b9` |
+| 2026-09-13 | `speech synthesize` requires `--voice` via cross-flag validation, invisible to the schema generator                                                                                                                                                  | `15523b9` |
+| 2026-09-13 | `usage: null` on delta frames crashed the stream one character into every reply                                                                                                                                                                      | `109eb9f` |
+| 2026-09-13 | A repeated-digit run passes Luhn, so `0000000000000000` was read as a card number                                                                                                                                                                    | `c0d989d` |
+| 2026-09-12 | 35 formatting issues in generated skill references; resolved incidentally when the formatted state was committed                                                                                                                                     | —         |

@@ -57,7 +57,16 @@ export interface LoopOptions {
  * shape intact — a placeholder is substituted for a value, never for a key or
  * a piece of syntax.
  */
-function sanitizeWire(wire: unknown[], vault: Vault): unknown[] {
+function sanitizeWire(
+  wire: unknown[],
+  vault: Vault,
+): { messages: unknown[]; counts: Record<string, number> } {
+  // What the vault held before this pass. The whole transcript is re-sent on
+  // every round-trip, so counting occurrences replaced would re-announce the
+  // same secrets on each one; counting values newly captured names each secret
+  // once, when it first appears.
+  const before = vault.stats().byRule;
+
   const walk = (value: unknown): unknown => {
     if (typeof value === "string") return vault.sanitize(value).text;
     if (Array.isArray(value)) return value.map(walk);
@@ -66,7 +75,15 @@ function sanitizeWire(wire: unknown[], vault: Vault): unknown[] {
     }
     return value;
   };
-  return wire.map(walk) as unknown[];
+  const messages = wire.map(walk);
+
+  const after = vault.stats().byRule;
+  const counts: Record<string, number> = {};
+  for (const [id, n] of Object.entries(after)) {
+    const added = n - (before[id] ?? 0);
+    if (added > 0) counts[id] = added;
+  }
+  return { messages, counts };
 }
 
 /** In-progress accumulation of one tool call's streamed deltas. */
@@ -154,7 +171,13 @@ async function consumeStream(
   });
 
   for (const call of toolCalls) {
-    sink({ type: "tool_call", call });
+    // Restored for display, like every other thing the user reads. The line
+    // below it is an approval diff showing real values; a raw placeholder here
+    // would make one call look like two different things.
+    sink({
+      type: "tool_call",
+      call: vault ? { ...call, arguments: vault.restore(call.arguments) } : call,
+    });
   }
 
   return { text, toolCalls, usage };
@@ -269,9 +292,16 @@ export async function runTurn(
       // through toWireMessages — user text, tool results, shell output, and
       // anything a future tool returns — so one call here covers all of it.
       const wire = toWireMessages(transcript);
+      const sanitized = options.vault ? sanitizeWire(wire, options.vault) : undefined;
+      const outbound = sanitized?.messages ?? wire;
+      // Say what was withheld — a silent filter is indistinguishable from one
+      // that is not running, and the user has no other way to tell.
+      if (sanitized && Object.keys(sanitized.counts).length > 0) {
+        sink({ type: "redacted", counts: sanitized.counts });
+      }
       const body = {
         model,
-        messages: options.vault ? sanitizeWire(wire, options.vault) : wire,
+        messages: outbound,
         tools: tools.schemas(language),
         stream: true,
       };

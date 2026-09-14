@@ -192,6 +192,11 @@ file, so the default stays the conservative one until there is evidence.
 
 Each ends green: `npx vp check --fix` reports 0 errors, package tests pass.
 
+**All seven are done** (`af517ec`, `6b92159`, `ee82070`, and the commit adding
+`--redact`). What each one turned out to require is recorded below; the record
+of what was built is [KNOWN_ISSUES.md](../KNOWN_ISSUES.md) §3.2 and the README's
+"Keeping secrets out of the model".
+
 ### Task 1 — `validators.ts`
 
 Pure functions, no I/O. `luhn`, `iso7064Mod11_2`, `iso7064Mod97_10`,
@@ -250,6 +255,30 @@ itself rather than being sent to the model as a prompt.
 
 Off by default. Document what is covered, what is not, and that it is
 best-effort — a redaction layer is a safety net, not a guarantee.
+
+---
+
+## What the build changed about this plan
+
+Three things the design did not anticipate, kept here because they are the
+reasons the code does not match the plan line for line.
+
+**The visibility line counts new captures, not replacements.** The whole
+transcript is re-sent on every round-trip, so counting occurrences replaced
+re-announced the same secret on each one. It counts values newly added to the
+vault instead, which names each secret once, at the turn it first appears.
+
+**Tool call arguments are restored for display as well as for execution.** The
+plan restored them only before the tool ran. In a live run the result was a
+`Running: write_file({"content": "card: [REDACTED_CARD_1]"})` line directly
+above an approval diff showing the real digits — one call looking like two
+different things. The renderer now sees restored arguments like everything else
+the user reads.
+
+**A leading slash is usually a path.** `/etc/hosts` and `/usr/local/bin/node`
+have to reach the model as prompts, so a command name is defined as a first
+word containing neither a slash nor a dot. Without that, "unknown command
+reports itself" turns into rejecting perfectly ordinary input.
 
 ---
 

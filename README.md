@@ -59,7 +59,11 @@ verified; only the live media responses are untested, for want of credits.
 - Shell with real interpreter selection (pwsh / powershell / bash / python /
   python3), probed at startup — no more assuming `bash` on Windows
 - Every path resolved against the project root and refused if it escapes
-- 140 tests — 135 headless unit tests plus 5 that drive the real CLI
+- **Redaction** (`--redact`) — secrets and personal data replaced with
+  placeholders on the way to the model and put back on the way out, so the
+  model can work with them without ever reading them
+- Bilingual slash commands — `/help` · `/帮助`, `/pii` · `/脱敏`, `/exit` · `/退出`
+- 232 tests — 227 headless unit tests plus 5 that drive the real CLI
 
 **Wired but not verified against the live API**
 
@@ -80,7 +84,6 @@ be more that only a real response would reveal. Treat these three as untested.
 - Full bilingual coverage — UI labels and tool descriptions are localized,
   some payload strings are not yet
 - Skills as a knowledge layer
-- PII redaction (the inherited prototype's version was removed; see FORK.md)
 
 ## Install
 
@@ -166,6 +169,61 @@ Approval required: generate_image
 [y]es / [n]o / [a]lways:
 ```
 
+## Keeping secrets out of the model
+
+Start the agent with `--redact` and sensitive values are replaced before the
+request leaves your machine:
+
+```
+$ kuang agent --redact
+> the test account is mike@realdomain.co.uk, card 4111 1111 1111 1111
+
+⚠ Withheld from the model: 1 CARD, 1 EMAIL
+```
+
+The model sees `[REDACTED_CARD_1]` and `[REDACTED_EMAIL_1]`. It can still count
+them, group them, tell them apart and refer back to them in a later turn — the
+placeholder for a given value is stable for the session — it simply cannot read
+what is inside. When it writes one back, into a reply or into a tool argument,
+the real value is restored first. So it can put your card number in a file it
+cannot see the digits of.
+
+Redaction happens at exactly one place, on the request itself, which means it
+covers everything: what you typed, what `read_file` returned, what `shell`
+printed, what any of the 228 platform commands sent back. A tool cannot leak by
+being forgotten, because no tool is individually responsible.
+
+Toggle it mid-session, and ask what it covers:
+
+```
+> /pii off
+> /pii on
+> /pii list
+```
+
+**Covered:** private keys · API tokens (OpenAI, GitHub, AWS, Slack, Google) ·
+payment cards · IBAN accounts · Chinese resident ID · French NIR · Singapore
+NRIC · US SSN · Canadian SIN · UK NINO · EU VAT · Chinese mobile numbers · North
+American phone numbers · email addresses.
+
+Where a checksum exists it has to pass — Luhn for cards and SIN, ISO 7064 for
+IBAN and Chinese ID, the weighted check for NRIC — so a random 16-digit number
+is not mistaken for a card. Tokens have to clear an entropy floor, so
+`sk-xxxxxxxxxxxxxxxx` in documentation is left alone.
+
+**It is best effort, and it is off by default.** A false positive costs nothing
+you will notice, since the value is restored anyway. A false negative is a
+secret the model read. Formats with no checksum lean on their surroundings and
+can be missed, and a credential in a shape nobody has written a rule for will
+pass straight through. Use it as a seatbelt, not as a guarantee — and if
+something must never reach a third party, do not put it in front of an agent.
+
+One thing to know: the redaction applies to the request, not to the transcript
+the agent keeps in memory, which holds the real values so restoration has
+something to restore. Nothing writes that transcript to disk today. Session
+persistence will have to decide what to do about it, and that decision is
+tracked rather than assumed.
+
 ## The inherited CLI
 
 All 228 upstream commands remain available and unmodified:
@@ -194,6 +252,9 @@ limitations, both deliberate and both tracked:
    `realpath`, so a symlink inside a repository can point outside it.
 
 Do not run this against a repository you do not trust.
+
+`--redact` reduces what a model sees, but it is a filter, not a boundary — see
+above for what it does and does not promise.
 
 Every known bug, gap and untested area is written down in
 [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).

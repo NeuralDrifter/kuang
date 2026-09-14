@@ -208,3 +208,101 @@ test("a disabled vault passes content through untouched", async () => {
 
   expect(JSON.stringify(cap.bodies[0])).toContain("4111");
 });
+
+// ── telling the user it happened ────────────────────────────────────────────
+
+test("the loop reports what it withheld, naming rules and not values", async () => {
+  const { sink, events } = collect();
+
+  await runTurn(
+    [{ role: "user", content: `card ${CARD} mail mike@realdomain.co.uk` }],
+    opts({ vault: new Vault(), sink, transport: scripted([[{ text: "ok" }]]) }),
+  );
+
+  const notices = events.filter((e) => e.type === "redacted");
+  expect(notices).toHaveLength(1);
+  expect(notices[0]).toEqual({ type: "redacted", counts: { CARD: 1, EMAIL: 1 } });
+  // The notice is printed to the same terminal the secret came from, but it
+  // must not be another place the value is written down.
+  expect(JSON.stringify(notices[0])).not.toContain("4111");
+});
+
+test("a secret is announced once, not on every round-trip", async () => {
+  const { sink, events } = collect();
+
+  await runTurn(
+    [{ role: "user", content: "read it" }],
+    opts({
+      vault: new Vault(),
+      sink,
+      // Two round-trips, and the whole transcript is re-sent on the second.
+      transport: scripted([
+        [{ toolCall: { index: 0, id: "c1", name: "read_file", argumentsDelta: '{"path":"a"}' } }],
+        [{ text: "done" }],
+      ]),
+    }),
+  );
+
+  // The tool result carries the card, so it is captured on round two only.
+  const notices = events.filter((e) => e.type === "redacted");
+  expect(notices).toHaveLength(1);
+});
+
+test("nothing is announced when nothing was sensitive", async () => {
+  const { sink, events } = collect();
+
+  await runTurn(
+    [{ role: "user", content: "what is 2 + 2" }],
+    opts({
+      tools: registryWith({ ...echoTool([]), run: async () => "4" }),
+      vault: new Vault(),
+      sink,
+      transport: scripted([[{ text: "4" }]]),
+    }),
+  );
+
+  expect(events.filter((e) => e.type === "redacted")).toHaveLength(0);
+});
+
+test("a disabled vault announces nothing", async () => {
+  const { sink, events } = collect();
+
+  await runTurn(
+    [{ role: "user", content: `card ${CARD}` }],
+    opts({ vault: new Vault(false), sink, transport: scripted([[{ text: "ok" }]]) }),
+  );
+
+  expect(events.filter((e) => e.type === "redacted")).toHaveLength(0);
+});
+
+test("the tool call shown to the user has its arguments restored", async () => {
+  const vault = new Vault();
+  const id = vault.sanitize(CARD).text;
+  const { sink, events } = collect();
+
+  await runTurn(
+    [{ role: "user", content: "go" }],
+    opts({
+      vault,
+      sink,
+      transport: scripted([
+        [
+          {
+            toolCall: {
+              index: 0,
+              id: "c1",
+              name: "read_file",
+              argumentsDelta: JSON.stringify({ path: id }),
+            },
+          },
+        ],
+        [{ text: "done" }],
+      ]),
+    }),
+  );
+
+  // The approval diff under this line shows real values; a raw placeholder
+  // here would make one call look like two different things.
+  const shown = events.find((e) => e.type === "tool_call");
+  expect(shown && "call" in shown ? shown.call.arguments : "").toContain(CARD);
+});

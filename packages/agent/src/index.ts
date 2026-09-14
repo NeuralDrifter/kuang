@@ -80,7 +80,20 @@ function isEof(err: unknown): boolean {
  * the CLI both live on the product side — this package cannot reach either
  * without importing `commands`, which depends on it.
  */
-export async function runAgent(ctx: CommandContext, platform?: PlatformAccess): Promise<void> {
+export interface AgentOptions {
+  /**
+   * Start with redaction on. Off by default because it is best-effort: a false
+   * positive costs nothing visible, but a user who believes it is complete and
+   * is wrong has been misled, so switching it on should be a decision.
+   */
+  redact?: boolean;
+}
+
+export async function runAgent(
+  ctx: CommandContext,
+  platform?: PlatformAccess,
+  options: AgentOptions = {},
+): Promise<void> {
   const language = ctx.settings.language;
   const cwd = process.cwd();
 
@@ -95,9 +108,8 @@ export async function runAgent(ctx: CommandContext, platform?: PlatformAccess): 
   // In-memory only: persistence to ~/.bailian/agent/approvals.json is Plan 2.
   const approvals = new ApprovalStore();
 
-  // Always present so `/pii on` works mid-session; it just starts disabled
-  // until the launcher passes `--redact`.
-  const vault = new Vault(false);
+  // Always present so `/pii on` works mid-session, whatever it started as.
+  const vault = new Vault(options.redact ?? false);
   const transport = dashscopeTransport(ctx.client);
   const sink = plainRenderer((s) => process.stdout.write(s), language);
   const model = ctx.settings.defaultTextModel ?? FALLBACK_MODEL;

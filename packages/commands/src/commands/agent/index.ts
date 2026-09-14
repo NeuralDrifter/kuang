@@ -83,7 +83,15 @@ export function agentCommand(getCommands: () => Record<string, AnyCommand>) {
     },
     auth: "apiKey",
     usageArgs: "[flags]",
-    flags: {},
+    flags: {
+      redact: {
+        type: "switch",
+        description: {
+          "en-US": "Hide secrets and personal data from the model (toggle with /pii)",
+          "zh-CN": "对模型隐藏密钥与个人数据（可用 /脱敏 切换）",
+        },
+      },
+    },
     async run(ctx) {
       if (ctx.settings.dryRun) {
         const language = ctx.settings.language;
@@ -92,7 +100,7 @@ export function agentCommand(getCommands: () => Record<string, AnyCommand>) {
       }
 
       const platform: PlatformAccess = { commands: getCommands(), invoke };
-      await runAgent(ctx, platform);
+      await runAgent(ctx, platform, { redact: ctx.flags.redact });
     },
   });
 }

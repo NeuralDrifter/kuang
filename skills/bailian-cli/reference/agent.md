@@ -24,10 +24,11 @@ Index: [index.md](index.md)
 
 #### Flags
 
-| Flag               | Type   | Required | Description  |
-| ------------------ | ------ | -------- | ------------ |
-| `--api-key <key>`  | string | no       | API key      |
-| `--base-url <url>` | string | no       | API base URL |
+| Flag               | Type   | Required | Description                                                      |
+| ------------------ | ------ | -------- | ---------------------------------------------------------------- |
+| `--redact`         | switch | no       | Hide secrets and personal data from the model (toggle with /pii) |
+| `--api-key <key>`  | string | no       | API key                                                          |
+| `--base-url <url>` | string | no       | API base URL                                                     |
 
 #### Examples
 

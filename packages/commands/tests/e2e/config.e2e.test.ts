@@ -585,7 +585,10 @@ describe("e2e: config", () => {
           "--output",
           "json",
         ],
-        { HOME: home },
+        // USERPROFILE as well as HOME: os.homedir() reads HOME on POSIX but
+        // USERPROFILE on Windows, so HOME alone lets the child CLI write its
+        // agent config into the developer's real home directory.
+        { HOME: home, USERPROFILE: home },
       );
       expect(exitCode, stderr).toBe(0);
       const data = parseStdoutJson<{ agent?: string; api_key?: string }>(stdout);
@@ -619,7 +622,7 @@ describe("e2e: config", () => {
           "--output",
           "json",
         ],
-        { HOME: home },
+        { HOME: home, USERPROFILE: home },
       );
       expect(exitCode, stderr).toBe(0);
       const data = parseStdoutJson<{ agent?: string; base_url?: string }>(stdout);
@@ -703,7 +706,7 @@ describe("e2e: config", () => {
           "--output",
           "json",
         ],
-        { HOME: home },
+        { HOME: home, USERPROFILE: home },
       );
       expect(exitCode, stderr).toBe(0);
       const data = parseStdoutJson<{
@@ -739,7 +742,7 @@ describe("e2e: config", () => {
           "--model",
           "qwen3-coder-plus",
         ],
-        { HOME: home },
+        { HOME: home, USERPROFILE: home },
       );
       expect(exitCode, stderr).toBe(0);
       const toml = readFileSync(join(home, ".codex", "config.toml"), "utf8");
@@ -772,7 +775,7 @@ describe("e2e: config", () => {
           "--model",
           "qwen3-coder-plus",
         ],
-        { HOME: home },
+        { HOME: home, USERPROFILE: home },
       );
       expect(exitCode, stderr).toBe(0);
       const yamlText = readFileSync(join(home, ".hermes", "config.yaml"), "utf8");

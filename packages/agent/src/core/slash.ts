@@ -47,7 +47,11 @@ const TEXT = {
   off: { "en-US": "off", "zh-CN": "关闭" },
   redaction: { "en-US": "Redaction", "zh-CN": "脱敏" },
   holding: {
-    "en-US": "Holding %n value(s) the model cannot see",
+    "en-US": "Holding %n value the model cannot see",
+    "zh-CN": "已保管 %n 项模型无法看到的数据",
+  },
+  holdingPlural: {
+    "en-US": "Holding %n values the model cannot see",
     "zh-CN": "已保管 %n 项模型无法看到的数据",
   },
   nothingHeld: {
@@ -106,7 +110,9 @@ function piiStatus(ctx: SlashContext): string {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([id, n]) => `${id} ${n}`)
       .join(", ");
-    lines.push(`${t("holding").replace("%n", String(total))} (${breakdown})`);
+    // "1 value(s)" reads like a placeholder someone forgot to finish.
+    const phrase = total === 1 ? t("holding") : t("holdingPlural");
+    lines.push(`${phrase.replace("%n", String(total))} (${breakdown})`);
   }
   return lines.join("\n");
 }

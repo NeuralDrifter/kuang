@@ -24,6 +24,7 @@ const LABELS = {
   approvalRequired: { "en-US": "Approval required", "zh-CN": "需要批准" },
   tokens: { "en-US": "Tokens", "zh-CN": "令牌" },
   error: { "en-US": "Error", "zh-CN": "错误" },
+  withheld: { "en-US": "Withheld from the model", "zh-CN": "已对模型隐藏" },
 } satisfies Record<string, LocalizedText>;
 
 /**
@@ -61,6 +62,17 @@ export function plainRenderer(write: (s: string) => void, language: Language): E
         const status = event.ok ? label("done") : label("failed");
         const marker = event.ok ? "✓" : "✗";
         write(`${marker} ${status}: ${event.summary}\n`);
+        break;
+      }
+      case "redacted": {
+        // Naming the rules and counts, never the values — this line is printed
+        // to the same terminal the secrets came from, but a user reading it
+        // should learn that the filter ran, not what it caught.
+        const parts = Object.entries(event.counts)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([id, n]) => `${n} ${id}`)
+          .join(", ");
+        write(`\n⚠ ${label("withheld")}: ${parts}\n`);
         break;
       }
       case "turn_end": {

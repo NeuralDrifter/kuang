@@ -29,6 +29,8 @@ export type AgentEvent =
   | { type: "tool_call"; call: ToolCall }
   | { type: "tool_approval_required"; call: ToolCall; preview: ToolPreview }
   | { type: "tool_result"; callId: string; ok: boolean; summary: string }
+  /** Values withheld from this request, counted by rule id. Never the values. */
+  | { type: "redacted"; counts: Record<string, number> }
   | { type: "turn_end"; usage: Usage }
   | { type: "error"; message: string };
 

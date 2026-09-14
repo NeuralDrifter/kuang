@@ -180,3 +180,12 @@ test("every rule carries both labels", () => {
     expect((rule.label as Record<string, string>)["en-US"], rule.id).toBeTruthy();
   }
 });
+
+test("the held count is grammatical at one and at many", () => {
+  const c = ctx();
+  c.vault.sanitize(CARD);
+  expect(say("/pii", c)).toContain("1 value the model");
+
+  c.vault.sanitize("mike@realdomain.co.uk");
+  expect(say("/pii", c)).toContain("2 values the model");
+});
