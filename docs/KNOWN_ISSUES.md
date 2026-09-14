@@ -41,25 +41,7 @@ always prompt, every time.
 > persistence, never after it.** The moment rules survive a restart, the
 > containment above disappears.
 
-### 1.2 The shell tool bypasses the secret-file guard
-
-**Where:** `packages/agent/src/core/tools/shell.ts`
-
-`read_file` refuses `.env`, ssh keys, `.pem` and friends, and `glob`/`grep`
-withhold them. The shell tool honours none of that: `cat .env`,
-`Get-Content .env` or `type .env` returns the contents straight to the model.
-
-It is `ask`-tier, so the user does approve it — but the approval prompt shows a
-command line, and `cat .env` looks innocuous next to the dozen other commands
-being approved in a session.
-
-**Fix options, in order of preference:** run the redaction vault over shell
-output once it is wired (which solves this and the general case together);
-or refuse shell commands whose text names a secret file, which is easy to
-evade and therefore mostly theatre; or surface the risk in the approval
-preview.
-
-### 1.3 Symlinks are followed out of the project
+### 1.2 Symlinks are followed out of the project
 
 **Where:** `packages/agent/src/core/tools/fs.ts`, `resolveInProject`
 
@@ -171,6 +153,13 @@ secret-file denylist is the only thing between the model and a credential.
 
 Tracked in [design/stage-3-redaction.md](design/stage-3-redaction.md), tasks 5
 through 7.
+
+This is also what closes the shell hole. The secret-file denylist only guards
+`read_file`, so `cat .env` returns the contents today — but shell output comes
+back as a tool result and passes through the loop like any other, so wiring the
+vault filters it along with everything else. Content redaction is the better
+mechanism regardless: a filename list cannot see the credential pasted into
+`config.ts`.
 
 ### 3.3 Localization is not complete
 
