@@ -224,18 +224,7 @@ Confirmed as having no non-test caller:
 
 ## 5. Repo tooling
 
-### 5.1 The pre-commit hook dirties 37 files on every commit
-
-**Where:** `packages/cli/package.json`, the `generate:reference` script
-
-It runs the generator and then `vp check --fix` over `skills/*/reference/`, but
-those regenerated files are never staged. So every commit leaves them modified
-in the working tree and you have to `git restore skills/` afterwards.
-
-**Fix:** either stage the regenerated files inside the hook, or stop formatting
-files the hook cannot stage. One line either way.
-
-### 5.2 The inherited test suite is red on Windows
+### 5.1 The inherited test suite is red on Windows
 
 `npx vp test --run` at the repo root reports roughly 80 failures across 31
 files. **None are in `packages/agent`**, which is green at 229. They fall into
@@ -255,7 +244,7 @@ that says whether this fork's code works.
 The permission and path groups want either Windows-aware assertions or a skip
 guard, not a fix to the code they test.
 
-### 5.3 Header check would block edits to inherited `tools/` files
+### 5.2 Header check would block edits to inherited `tools/` files
 
 **Where:** `tools/check-headers.mjs`, `isCovered`
 
@@ -263,7 +252,7 @@ Coverage claims all of `tools/**`, but 22 inherited files there have no header.
 Nothing fails today because none of them have been touched — the first edit to
 e.g. `tools/generate-reference.ts` will demand a header nobody expects.
 
-### 5.4 Minor hook and checker warts
+### 5.3 Minor hook and checker warts
 
 - `.vite-hooks/pre-commit` uses an unquoted `$(git diff --cached …)`, so it
   word-splits on filenames containing spaces.
@@ -300,6 +289,7 @@ Kept rather than deleted, so the record shows what went wrong and when.
 
 | Found      | Issue                                                                                                                                                                                                                                                | Fixed in  |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 2026-09-14 | The formatter and `generate-reference.ts` both claimed `skills/*/reference`, so each commit left 34 files dirty — and the formatter escaped markdown inside flag docs, teaching the model config keys that do not exist (`base*url` for `base_url`)  | `pending` |
 | 2026-09-13 | `config.e2e.test.ts` set only `HOME` to isolate the child CLI, so on Windows it wrote agent configs into the developer's real home directory — it overwrote `~/.codex/config.toml`, `~/.codex/auth.json` and `~/.hermes/config.yaml` on this machine | pending   |
 | 2026-09-13 | `glob` emitted only files, so the agent reported "there are no subdirectories" when there were six                                                                                                                                                   | `92e3244` |
 | 2026-09-13 | `.env` was readable by the auto-tier `read_file`, with no prompt                                                                                                                                                                                     | `92e3244` |
