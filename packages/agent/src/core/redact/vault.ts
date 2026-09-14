@@ -1,0 +1,114 @@
+// Copyright 2026 Michael P. Burgus <https://github.com/NeuralDrifter>
+// SPDX-License-Identifier: Apache-2.0
+
+/**
+ * Holds the real values so the model never sees them.
+ *
+ * Sensitive text is replaced with a labelled placeholder on the way to the
+ * model, and put back on the way out — to the screen, and to any tool about to
+ * act on it. The model reasons about `[REDACTED_CARD_1]`; the user reads their
+ * actual card number, and a file written back gets the real digits.
+ *
+ * Placeholders are **stable per value** for the life of the session. The same
+ * card is always `[REDACTED_CARD_1]`, so the model can still deduplicate,
+ * group and refer back across turns — it just cannot read the contents.
+ *
+ * Over-redaction is therefore cheap: a value the model only copies through is
+ * restored intact and nobody notices. The cost that matters is that the model
+ * is blind to the *contents*, so the system prompt tells it to say so rather
+ * than guess when a task needs them.
+ */
+import { findMatches } from "./rules.ts";
+
+/** Issued placeholders match this exactly — case-sensitive, numbered. */
+const PLACEHOLDER = /\[REDACTED_[A-Z_]+_\d+\]/g;
+
+export interface SanitizeResult {
+  text: string;
+  /** Occurrences replaced in this call, by rule id. For the user-facing notice. */
+  found: Record<string, number>;
+}
+
+export class Vault {
+  /** Real value -> placeholder, so one value always gets one placeholder. */
+  private readonly toPlaceholder = new Map<string, string>();
+  /** Placeholder -> real value, for restoration. */
+  private readonly toValue = new Map<string, string>();
+  /** Next number per rule id. */
+  private readonly counters = new Map<string, number>();
+
+  private on: boolean;
+
+  constructor(enabled = true) {
+    this.on = enabled;
+  }
+
+  get enabled(): boolean {
+    return this.on;
+  }
+
+  /**
+   * Turn redaction on or off mid-session. Disabling stops new values being
+   * captured but never strands placeholders already issued — the model may
+   * still be holding them, and they must keep restoring.
+   */
+  setEnabled(on: boolean): void {
+    this.on = on;
+  }
+
+  /** Replace every validated match with its stable placeholder. */
+  sanitize(text: string): SanitizeResult {
+    if (!this.on) return { text, found: {} };
+
+    const matches = findMatches(text);
+    if (matches.length === 0) return { text, found: {} };
+
+    const found: Record<string, number> = {};
+    let out = "";
+    let cursor = 0;
+
+    for (const match of matches) {
+      out += text.slice(cursor, match.start) + this.placeholderFor(match.value, match.ruleId);
+      cursor = match.end;
+      found[match.ruleId] = (found[match.ruleId] ?? 0) + 1;
+    }
+    out += text.slice(cursor);
+
+    return { text: out, found };
+  }
+
+  /**
+   * Put the real values back.
+   *
+   * A placeholder this vault never issued is left exactly as written: the model
+   * can invent one, and replacing it with nothing would silently delete text
+   * the user is about to read or write to a file.
+   */
+  restore(text: string): string {
+    if (this.toValue.size === 0) return text;
+    return text.replace(PLACEHOLDER, (token) => this.toValue.get(token) ?? token);
+  }
+
+  /** Distinct values held, overall and by rule. */
+  stats(): { total: number; byRule: Record<string, number> } {
+    const byRule: Record<string, number> = {};
+    for (const placeholder of this.toValue.keys()) {
+      const id = placeholder.slice("[REDACTED_".length, placeholder.lastIndexOf("_"));
+      byRule[id] = (byRule[id] ?? 0) + 1;
+    }
+    return { total: this.toValue.size, byRule };
+  }
+
+  private placeholderFor(value: string, ruleId: string): string {
+    const existing = this.toPlaceholder.get(value);
+    if (existing) return existing;
+
+    const next = (this.counters.get(ruleId) ?? 0) + 1;
+    this.counters.set(ruleId, next);
+
+    const placeholder = `[REDACTED_${ruleId}_${next}]`;
+    this.toPlaceholder.set(value, placeholder);
+    this.toValue.set(placeholder, value);
+    return placeholder;
+  }
+}
