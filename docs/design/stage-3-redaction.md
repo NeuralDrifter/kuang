@@ -114,6 +114,50 @@ placeholder within a session — the model can refer back to
 Placeholders name their kind: `[REDACTED_CARD_1]`, `[REDACTED_EMAIL_2]`. The
 model reasons better about a labelled hole than an anonymous one.
 
+### Telling the model what a placeholder is
+
+The system prompt must explain placeholders: they stand for real values, they
+can be passed through and copied safely, but their contents cannot be
+inspected. If a task needs the actual value — validating a format, comparing
+magnitudes, fixing a checksum — the model should say so rather than guess.
+
+This matters more than rule precision. Over-redaction is usually harmless:
+the model copies a placeholder through and restoration puts the real value
+back, so the user never notices. Placeholders are stable per value, so
+deduplication and grouping still work on them, and the label carries the type.
+The one real cost is that the model is **silently blind** on tasks needing the
+content, and may answer confidently anyway. Telling it the rule converts that
+into it telling you.
+
+### Runtime control
+
+Redaction is toggleable mid-session, because the moment it gets in the way is
+the moment you want it off:
+
+| Command                | Effect                                                   |
+| ---------------------- | -------------------------------------------------------- |
+| `/pii` or `/脱敏`      | Report status: on/off, and what has been redacted so far |
+| `/pii on` / `/pii off` | Toggle for the rest of the session                       |
+
+`脱敏` is the standard Chinese term for data masking — what a developer there
+would expect — rather than a literal rendering of "PII".
+
+This needs a small slash-command layer; the REPL currently only recognises
+`/exit`. Add `/help` at the same time, listing every command in the active
+language. Every command must work in both languages.
+
+### Visibility
+
+Every sanitize pass reports what it did:
+
+```
+⚠ redacted 47 values (43 CN_MOBILE, 4 EMAIL) before the model saw this
+```
+
+The old vault's real failure was silence — the agent read shredded files and
+nobody knew. A count after each tool result makes both over-redaction and
+model blindness obvious immediately.
+
 ### Opt-in
 
 Off by default behind `--redact`, until the false-positive rate is known on
@@ -167,7 +211,17 @@ they reach the renderer.
 Test: a tool call whose argument is a placeholder executes with the real value;
 the transcript sent to the model contains no real secret.
 
-### Task 6 — `--redact` flag and README
+### Task 6 — slash commands
+
+The REPL recognises only `/exit`. Add a small command table: `/help`,
+`/pii` (alias `/脱敏`) with `on`/`off`/no-argument-reports-status. Bilingual
+names and bilingual output, per the project rule that every command works in
+both languages.
+
+Test: both names resolve to the same command; an unknown `/command` reports
+itself rather than being sent to the model as a prompt.
+
+### Task 7 — `--redact` flag and README
 
 Off by default. Document what is covered, what is not, and that it is
 best-effort — a redaction layer is a safety net, not a guarantee.
