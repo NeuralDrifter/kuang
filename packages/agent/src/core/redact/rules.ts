@@ -12,8 +12,11 @@
  * Two deliberate trade-offs, both in favour of precision:
  *
  * - **Separators are required** where an identifier has no checksum strong
- *   enough to stand alone. A bare run of nine digits is a timestamp far more
- *   often than it is an SSN, and Luhn alone passes one nine-digit number in ten.
+ *   enough to stand alone. A bare run of nine digits is usually an arbitrary
+ *   identifier — a database id, an order number, a test fixture. The SSN
+ *   structural rules only exclude area 000/666/900+, group 00 and serial 0000,
+ *   perhaps 10-15% of the space, so matching bare digits would be wrong far
+ *   more often than right. Luhn alone passes one nine-digit number in ten.
  *   `123-45-6789` is a claim about what the number is; `123456789` is not.
  * - **Canadian passport is gone.** Two letters and six digits describes a
  *   passport, a prefixed short SHA, and a thousand identifiers. No checksum
@@ -144,15 +147,16 @@ export const RULES: RedactionRule[] = [
     validate: nricChecksum,
   },
   {
-    // Separators required: a bare nine-digit run is a timestamp far more often
-    // than an SSN, and the structural rules alone cannot tell them apart.
+    // Separators required. The structural rules reject only about a tenth of
+    // the nine-digit space, so on an arbitrary id they would be wrong far more
+    // often than right.
     id: "US_SSN",
     pattern: /\b\d{3}-\d{2}-\d{4}\b/g,
     validate: ssnStructurallyValid,
   },
   {
-    // Separators required, and Luhn. Without the separator this fired on one
-    // nine-digit number in ten — the single worst rule in the old set.
+    // Separators required, and Luhn. Luhn alone passes one nine-digit number
+    // in ten, so without the separator this was the worst rule in the old set.
     id: "CA_SIN",
     pattern: /\b\d{3}[ -]\d{3}[ -]\d{3}\b/g,
     validate: (m) => luhn(d(m)),

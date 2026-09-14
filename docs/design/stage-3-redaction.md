@@ -32,7 +32,8 @@ Two lessons, and they are the whole design:
 
 1. **Match structure, then validate.** Every rule that has a checksum must run
    it. A nine-digit number is not a SIN; a nine-digit number that passes Luhn
-   might be.
+   might be. Where no checksum is strong enough, require the separators a
+   person would write — a bare nine-digit run is usually an arbitrary id.
 2. **A false positive on tool output is a correctness bug, not just noise.**
    Precision is the feature.
 
