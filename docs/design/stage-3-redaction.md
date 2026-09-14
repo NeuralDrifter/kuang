@@ -73,18 +73,40 @@ things. There is no checksum to lean on. Keeping it means corrupting code.
 
 ## Design
 
-### Where it applies
+### Where it applies — one boundary, not many
 
-| Direction                     | Redact?                       |
-| ----------------------------- | ----------------------------- |
-| User input → model            | **yes**                       |
-| Tool results → model          | **yes**, validated rules only |
-| Model output → user           | **restore**                   |
-| Model output → tool execution | **restore**                   |
+Redaction happens at exactly **one** place in each direction.
 
-Redacting tool results is the point — a secret in a config file the agent reads
-is exactly the leak worth stopping. The prototype's mistake was doing it with
-rules that fired on everything, not doing it at all.
+```
+transcript (real values)
+    └─ toWireMessages() ──sanitize──→ request body
+
+model output ──restore──→ text shown to the user
+             ──restore──→ tool call arguments before execution
+```
+
+`toWireMessages` is the complete inbound boundary: the only other things in the
+request body are the system prompt and the tool schemas, both of which are ours.
+So one call covers user input, `read_file`, `shell`, `bl_run_command` and every
+tool added later, without anyone having to remember to wire it up.
+
+The alternative — sanitizing at each entry point — was the original design and
+is worse. It needs a call per source, and a missed one leaks silently. A single
+choke point cannot be forgotten.
+
+Outbound is the mirror: everything the model produces is restored, and it does
+not matter whether it is prose for the screen or an argument about to be
+executed. A placeholder reaching a tool unrestored would write
+`[REDACTED_CARD_1]` into a real file.
+
+**The transcript keeps real values.** Only the wire copy is redacted, so nothing
+downstream needs to know redaction exists.
+
+> **Consequence for session persistence.** Because the transcript holds real
+> values, a saved session file will contain real secrets. That is a decision for
+> the session stage — encrypt it, redact on save, or document that a session
+> file is as sensitive as the data it touched — but it follows directly from
+> this design and should not come as a surprise then.
 
 ### Restoration must be exact
 
@@ -204,9 +226,12 @@ was correct. Test a placeholder split across every possible chunk boundary.
 
 ### Task 5 — wire into the loop
 
-`runTurn` takes an optional vault. Sanitize user messages and tool results on
-the way in; restore tool-call arguments before execution and text deltas before
-they reach the renderer.
+`runTurn` takes an optional vault. Sanitize once, where `toWireMessages` builds
+the request body. Restore in two places on the way out: tool call arguments
+before execution, and text deltas before the renderer (through
+`StreamRestorer`, so a placeholder split across chunks is never printed raw).
+
+Do **not** sanitize at the individual push sites. One boundary is the point.
 
 Test: a tool call whose argument is a placeholder executes with the real value;
 the transcript sent to the model contains no real secret.
