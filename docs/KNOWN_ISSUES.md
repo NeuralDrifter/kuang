@@ -99,26 +99,6 @@ probed on Windows, but the moment the probe list grows this becomes real.
 
 ---
 
-### 2.6 Input arriving faster than one line per prompt is silently dropped
-
-**Where:** `packages/agent/src/index.ts`, the `readLine` loop
-
-`readline.question()` consumes one line and discards any others that arrived in
-the same chunk, because nothing is listening between questions. So:
-
-- **Pasting a multi-line message** — a stack trace, a diff, a log — sends only
-  the first line to the model, and the rest vanish with no indication.
-- **Piping a script** of commands runs only the first one.
-
-Found while smoke-testing the slash commands: a feed of seven commands executed
-two. It is not new, but it is worse than it looks, because paste is how people
-hand an agent an error message.
-
-**Fix:** keep a `line` listener on the interface and push into a queue that
-`readLine` drains, so lines buffer instead of being dropped. Multi-line paste
-also wants to be treated as one message rather than several prompts, which is
-a question for the Ink work.
-
 ## 3. Not verified
 
 ### 3.1 Live media responses
@@ -271,6 +251,7 @@ Kept rather than deleted, so the record shows what went wrong and when.
 
 | Found      | Issue                                                                                                                                                                                                                                                | Fixed in  |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 2026-09-14 | Input arriving faster than one line per prompt was discarded, so pasting a stack trace sent only its first line and piping a script ran only its first command                                                                                       | `pending` |
 | 2026-09-14 | A symlink or junction inside the project was followed out of it, and `read_file` is tier `auto` — cloning a hostile repository was enough to read `~/.ssh/id_rsa` with no prompt                                                                     | `pending` |
 | 2026-09-14 | The formatter and `generate-reference.ts` both claimed `skills/*/reference`, so each commit left 34 files dirty — and the formatter escaped markdown inside flag docs, teaching the model config keys that do not exist (`base*url` for `base_url`)  | `pending` |
 | 2026-09-13 | `config.e2e.test.ts` set only `HOME` to isolate the child CLI, so on Windows it wrote agent configs into the developer's real home directory — it overwrote `~/.codex/config.toml`, `~/.codex/auth.json` and `~/.hermes/config.yaml` on this machine | pending   |

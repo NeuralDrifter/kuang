@@ -13,6 +13,7 @@
 import { createInterface } from "node:readline/promises";
 import type { CommandContext, LocalizedText } from "bailian-cli-core";
 import { ApprovalStore } from "./core/approvals.ts";
+import { createMessageReader } from "./core/input.ts";
 import type { ApprovalDecision } from "./core/approvals.ts";
 import { runTurn } from "./core/loop.ts";
 import type { ApprovalAsker } from "./core/loop.ts";
@@ -56,21 +57,6 @@ const SYSTEM_PROMPT: LocalizedText = {
     "你无法读取其中的内容，因此若某项任务确实需要真实内容，请直接说明，而不要猜测。" +
     "切勿自行编造占位符；未曾签发的占位符会被原样输出。",
 };
-
-/**
- * Whether `err` is `rl.question` rejecting because stdin has already ended.
- * Verified empirically on Node v24: closing the input stream and then
- * calling `question()` again rejects with a plain `Error` whose `code` is
- * `"ERR_USE_AFTER_CLOSE"` (message `"readline was closed"`) — not a `close`
- * event racing the call, and not any other code.
- */
-function isEof(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    (err as { code?: unknown }).code === "ERR_USE_AFTER_CLOSE"
-  );
-}
 
 /**
  * Run the interactive agent until the user types `/exit`.
@@ -117,19 +103,20 @@ export async function runAgent(
   const rl = createInterface({ input: process.stdin, output: process.stdout });
 
   /**
-   * Read one line, or `undefined` at EOF. `rl.question` rejects with
-   * `ERR_USE_AFTER_CLOSE` once stdin ends — Ctrl+D at an interactive prompt,
-   * or a piped input's last line — and an unhandled rejection there would
-   * propagate to the CLI's generic error handler, which has no idea this is
-   * a normal way to leave a REPL. EOF is treated like `/exit`, not an error.
+   * Read the next message, or `undefined` at EOF.
+   *
+   * Not `rl.question`: that resolves with one line and discards anything else
+   * that arrived in the same chunk, so a pasted stack trace reached the model
+   * as its first line alone. The reader listens continuously, and joins lines
+   * that arrive together into one message — see `core/input.ts`.
+   *
+   * The prompt is written here rather than passed to readline, because one
+   * prompt belongs to one message, not to each line of a paste.
    */
+  const nextMessage = createMessageReader(rl);
   const readLine = async (prompt: string): Promise<string | undefined> => {
-    try {
-      return await rl.question(prompt);
-    } catch (err) {
-      if (isEof(err)) return undefined;
-      throw err;
-    }
+    process.stdout.write(prompt);
+    return nextMessage();
   };
 
   const ask: ApprovalAsker = async (): Promise<ApprovalDecision> => {

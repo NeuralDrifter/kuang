@@ -149,6 +149,10 @@ Approval required: shell
 Answer `a` and it remembers the _pattern_ `pnpm test*`, so `pnpm test --watch`
 won't ask again — but `rm -rf /` still will. Type `/exit` or press Ctrl+D to leave.
 
+Paste as much as you like. Lines that arrive together are read as one message,
+so a stack trace or a diff goes to the model whole and costs one turn rather
+than one per line.
+
 It can also reach the platform. Ask for something it has no local tool for and
 it will find the command itself:
 
