@@ -218,7 +218,9 @@ export function mediaTools(platform: PlatformAccess, language: Language): Tool[]
         ...(spec.required.length > 0 ? { required: spec.required } : {}),
       },
       preview: async (args) => {
-        const subject = String(args[spec.previewArg] ?? "").slice(0, 200);
+        // The model supplies this; an object would stringify to "[object Object]".
+        const raw = args[spec.previewArg];
+        const subject = (typeof raw === "string" ? raw : JSON.stringify(raw) || "").slice(0, 200);
         const note = spends ? ` — ${localize(COST_NOTE, language)}` : "";
         return { summary: `${spec.path}: ${subject}${note}` };
       },

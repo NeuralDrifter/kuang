@@ -17,6 +17,8 @@
  */
 import type { Language } from "bailian-cli-core";
 import { assistantMessage, toWireMessages, type AgentMessage, type ToolCall } from "./messages.ts";
+import { StreamRestorer } from "./redact/stream.ts";
+import type { Vault } from "./redact/vault.ts";
 import type { EventSink, ToolPreview, Usage } from "./events.ts";
 import type { Tool, ToolRegistry } from "./tools/registry.ts";
 import type { ApprovalDecision, ApprovalStore } from "./approvals.ts";
@@ -40,6 +42,31 @@ export interface LoopOptions {
   model: string;
   language: Language;
   maxIterations?: number;
+  /**
+   * When present, the single redaction boundary. Sensitive values are replaced
+   * on the way to the model and restored on the way out — to the screen and to
+   * any tool about to act on them. The transcript itself keeps real values.
+   */
+  vault?: Vault;
+}
+
+/**
+ * Redact every string in the serialized messages.
+ *
+ * Walking the structure rather than stringifying the whole body keeps the JSON
+ * shape intact — a placeholder is substituted for a value, never for a key or
+ * a piece of syntax.
+ */
+function sanitizeWire(wire: unknown[], vault: Vault): unknown[] {
+  const walk = (value: unknown): unknown => {
+    if (typeof value === "string") return vault.sanitize(value).text;
+    if (Array.isArray(value)) return value.map(walk);
+    if (value && typeof value === "object") {
+      return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, walk(v)]));
+    }
+    return value;
+  };
+  return wire.map(walk) as unknown[];
 }
 
 /** In-progress accumulation of one tool call's streamed deltas. */
@@ -83,7 +110,9 @@ async function previewFor(
 async function consumeStream(
   stream: AsyncIterable<StreamChunk>,
   sink: EventSink,
+  vault?: Vault,
 ): Promise<{ text: string; toolCalls: ToolCall[]; usage: Usage }> {
+  const restorer = vault ? new StreamRestorer(vault) : undefined;
   let text = "";
   let usage: Usage = { promptTokens: 0, completionTokens: 0 };
   const pending = new Map<number, PendingToolCall>();
@@ -92,7 +121,10 @@ async function consumeStream(
   for await (const chunk of stream) {
     if (chunk.text !== undefined) {
       text += chunk.text;
-      sink({ type: "text_delta", text: chunk.text });
+      // Restored for display only, and through the buffering restorer so a
+      // placeholder straddling two chunks is never printed half-formed.
+      const shown = restorer ? restorer.push(chunk.text) : chunk.text;
+      if (shown) sink({ type: "text_delta", text: shown });
     }
     if (chunk.toolCall !== undefined) {
       const delta = chunk.toolCall;
@@ -112,6 +144,9 @@ async function consumeStream(
     }
     if (chunk.usage !== undefined) usage = chunk.usage;
   }
+
+  const tail = restorer?.flush();
+  if (tail) sink({ type: "text_delta", text: tail });
 
   const toolCalls: ToolCall[] = order.map((index) => {
     const entry = pending.get(index)!;
@@ -142,7 +177,10 @@ async function resolveCall(call: ToolCall, options: LoopOptions): Promise<AgentM
 
   let args: Record<string, unknown>;
   try {
-    args = JSON.parse(call.arguments) as Record<string, unknown>;
+    // Restore before parsing: a placeholder reaching a tool unrestored would
+    // write `[REDACTED_CARD_1]` into a real file.
+    const raw = options.vault ? options.vault.restore(call.arguments) : call.arguments;
+    args = JSON.parse(raw) as Record<string, unknown>;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const summary =
@@ -227,14 +265,18 @@ export async function runTurn(
     for (let iteration = 0; iteration < maxIterations; iteration++) {
       sink({ type: "turn_start" });
 
+      // The single inbound boundary. Everything the model can see passes
+      // through toWireMessages — user text, tool results, shell output, and
+      // anything a future tool returns — so one call here covers all of it.
+      const wire = toWireMessages(transcript);
       const body = {
         model,
-        messages: toWireMessages(transcript),
+        messages: options.vault ? sanitizeWire(wire, options.vault) : wire,
         tools: tools.schemas(language),
         stream: true,
       };
 
-      const { text, toolCalls, usage } = await consumeStream(transport(body), sink);
+      const { text, toolCalls, usage } = await consumeStream(transport(body), sink, options.vault);
       transcript.push(assistantMessage(text, toolCalls));
 
       for (const call of toolCalls) {

@@ -1,0 +1,210 @@
+// Copyright 2026 Michael P. Burgus <https://github.com/NeuralDrifter>
+// SPDX-License-Identifier: Apache-2.0
+
+/**
+ * The redaction boundary, exercised through the real turn loop.
+ *
+ * One sanitize point inbound and one restore point outbound, so a value only
+ * has to be caught once regardless of which tool produced it.
+ */
+import { expect, test } from "vite-plus/test";
+import { ApprovalStore } from "../src/core/approvals.ts";
+import { collect } from "../src/core/events.ts";
+import { runTurn, type LoopOptions, type StreamChunk } from "../src/core/loop.ts";
+import type { AgentMessage } from "../src/core/messages.ts";
+import { Vault } from "../src/core/redact/vault.ts";
+import { ToolRegistry, type Tool } from "../src/core/tools/registry.ts";
+
+const CARD = "4111 1111 1111 1111";
+
+function scripted(rounds: StreamChunk[][]) {
+  let round = 0;
+  return async function* () {
+    const chunks = rounds[round] ?? [];
+    round += 1;
+    for (const chunk of chunks) yield chunk;
+  };
+}
+
+/** A tool that reports back whatever argument it was handed. */
+function echoTool(seen: string[]): Tool {
+  return {
+    name: "read_file",
+    tier: "auto",
+    description: { "en-US": "read", "zh-CN": "读" },
+    parameters: { type: "object", properties: { path: { type: "string" } } },
+    run: async (args) => {
+      seen.push(String(args.path));
+      return `contents: ${CARD}`;
+    },
+  };
+}
+
+function registryWith(tool: Tool): ToolRegistry {
+  const r = new ToolRegistry();
+  r.register(tool);
+  return r;
+}
+
+function opts(over: Partial<LoopOptions> & Pick<LoopOptions, "transport">): LoopOptions {
+  const { sink } = collect();
+  return {
+    tools: registryWith(echoTool([])),
+    approvals: new ApprovalStore(),
+    ask: async () => "allow",
+    sink,
+    model: "qwen-max",
+    language: "en-US",
+    ...over,
+  };
+}
+
+/** Capture the request body the transport was handed. */
+function capturing(rounds: StreamChunk[][]) {
+  const bodies: unknown[] = [];
+  const inner = scripted(rounds);
+  return {
+    bodies,
+    transport: (body: unknown) => {
+      bodies.push(body);
+      return inner();
+    },
+  };
+}
+
+test("a secret the user typed never reaches the request body", async () => {
+  const vault = new Vault();
+  const cap = capturing([[{ text: "noted" }]]);
+
+  await runTurn(
+    [{ role: "user", content: `my card is ${CARD}` }],
+    opts({ transport: cap.transport, vault }),
+  );
+
+  const wire = JSON.stringify(cap.bodies[0]);
+  expect(wire).not.toContain("4111");
+  expect(wire).toContain("REDACTED_CARD_1");
+});
+
+test("a secret inside a tool result never reaches the request body", async () => {
+  const vault = new Vault();
+  const cap = capturing([
+    [{ toolCall: { index: 0, id: "c1", name: "read_file", argumentsDelta: '{"path":"a.env"}' } }],
+    [{ text: "done" }],
+  ]);
+
+  await runTurn([{ role: "user", content: "read it" }], opts({ transport: cap.transport, vault }));
+
+  // The tool returned the card; the second round-trip must not carry it.
+  const second = JSON.stringify(cap.bodies[1]);
+  expect(second).not.toContain("4111");
+  expect(second).toContain("REDACTED_CARD_1");
+});
+
+test("the transcript itself keeps the real values", async () => {
+  const vault = new Vault();
+  const cap = capturing([[{ text: "ok" }]]);
+
+  const out = await runTurn(
+    [{ role: "user", content: `card ${CARD}` }],
+    opts({ transport: cap.transport, vault }),
+  );
+
+  // Only the wire copy is redacted — nothing downstream should have to restore.
+  expect(JSON.stringify(out)).toContain("4111");
+});
+
+test("a placeholder in a tool argument is restored before the tool runs", async () => {
+  const vault = new Vault();
+  // Teach the vault the value, so the model can legitimately echo its placeholder.
+  const id = vault.sanitize(CARD).text;
+
+  const seen: string[] = [];
+  await runTurn(
+    [{ role: "user", content: "go" }],
+    opts({
+      tools: registryWith(echoTool(seen)),
+      vault,
+      transport: scripted([
+        [
+          {
+            toolCall: {
+              index: 0,
+              id: "c1",
+              name: "read_file",
+              argumentsDelta: JSON.stringify({ path: id }),
+            },
+          },
+        ],
+        [{ text: "done" }],
+      ]),
+    }),
+  );
+
+  // Writing `[REDACTED_CARD_1]` into a real file would be the worst outcome.
+  expect(seen).toEqual([CARD]);
+});
+
+test("text shown to the user has placeholders restored", async () => {
+  const vault = new Vault();
+  const id = vault.sanitize(CARD).text;
+  const { sink, events } = collect();
+
+  await runTurn(
+    [{ role: "user", content: "go" }],
+    opts({ vault, sink, transport: scripted([[{ text: `your card is ${id}` }]]) }),
+  );
+
+  const shown = events
+    .filter((e): e is Extract<typeof e, { type: "text_delta" }> => e.type === "text_delta")
+    .map((e) => e.text)
+    .join("");
+
+  expect(shown).toBe(`your card is ${CARD}`);
+});
+
+test("a placeholder split across stream chunks is still restored for display", async () => {
+  const vault = new Vault();
+  const id = vault.sanitize(CARD).text;
+  const { sink, events } = collect();
+
+  const half = Math.floor(id.length / 2);
+  await runTurn(
+    [{ role: "user", content: "go" }],
+    opts({
+      vault,
+      sink,
+      transport: scripted([[{ text: `card ${id.slice(0, half)}` }, { text: id.slice(half) }]]),
+    }),
+  );
+
+  const shown = events
+    .filter((e): e is Extract<typeof e, { type: "text_delta" }> => e.type === "text_delta")
+    .map((e) => e.text)
+    .join("");
+
+  expect(shown).toBe(`card ${CARD}`);
+  expect(shown).not.toContain("REDACTED");
+});
+
+test("without a vault the loop behaves exactly as before", async () => {
+  const cap = capturing([[{ text: "ok" }]]);
+  const messages: AgentMessage[] = [{ role: "user", content: `card ${CARD}` }];
+
+  await runTurn(messages, opts({ transport: cap.transport }));
+
+  // Redaction is opt-in; no vault means no interference.
+  expect(JSON.stringify(cap.bodies[0])).toContain("4111");
+});
+
+test("a disabled vault passes content through untouched", async () => {
+  const vault = new Vault(false);
+  const cap = capturing([[{ text: "ok" }]]);
+
+  await runTurn(
+    [{ role: "user", content: `card ${CARD}` }],
+    opts({ transport: cap.transport, vault }),
+  );
+
+  expect(JSON.stringify(cap.bodies[0])).toContain("4111");
+});
