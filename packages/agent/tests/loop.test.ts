@@ -339,6 +339,10 @@ test("a tool whose run throws does not end the session", async () => {
 test("a transport failure surfaces as an error event, not an exception", async () => {
   const failing = async function* (): AsyncIterable<StreamChunk> {
     throw new Error("network down");
+    // Unreachable, and deliberately kept: the failure has to happen during
+    // iteration rather than at the call, which means this must stay a
+    // generator, and `require-yield` will not accept one without a yield.
+    // eslint-disable-next-line no-unreachable
     yield { text: "unreachable" };
   };
   const { sink, events } = collect();
