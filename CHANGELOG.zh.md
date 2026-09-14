@@ -6,6 +6,13 @@
 
 [English](CHANGELOG.md) · [README](README.zh.md) · [参与贡献](CONTRIBUTING.zh.md)
 
+## [1.25.0] - 2026-09-14
+
+### 新增
+
+- **Token Plan harness 权益额度** —— `bl token-plan harness-quota` 查看 Token Plan harness 权益额度用量（Console 认证），联合 harness 列表与已发放权益，展示已用/总额度、使用比例和重置时间；待发放权益的 harness 以「发放中」状态列出。
+- 通过 `--type official_tool|infrastructure` 筛选 harness 列表；支持额度框输出或 `--output json`。
+
 ## [1.24.0] - 2026-09-11
 
 ### 新增
