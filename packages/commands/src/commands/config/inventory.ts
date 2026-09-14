@@ -142,7 +142,6 @@ function skillRoots(home: string): Array<{ source: string; dir: string }> {
     { source: "opencode", dir: join(home, ".config", "opencode", "skills") },
     { source: "openclaw", dir: join(home, ".openclaw", "skills") },
     { source: "openclaw", dir: join(home, ".openclaw", "workspace", "skills") },
-    { source: "hermes", dir: join(home, ".hermes", "skills") },
     { source: "gemini", dir: join(home, ".gemini", "skills") },
     {
       source: "antigravity",
@@ -753,39 +752,6 @@ const AGENT_PROBES: AgentProbe[] = [
     },
   },
   {
-    id: "hermes",
-    label: "Hermes Agent",
-    paths: (h) => [join(h, ".hermes", "config.yaml")],
-    detect: (h) => {
-      const text = readText(join(h, ".hermes", "config.yaml"));
-      if (!text) return { configured: false };
-      let config: Record<string, unknown> | undefined;
-      try {
-        config = asRecord(yaml.parse(text));
-      } catch {
-        return { configured: false };
-      }
-      const providers = Array.isArray(config?.custom_providers) ? config.custom_providers : [];
-      const legacyConfigured = providers.some(
-        (provider) => asRecord(provider)?.name === "bailian-cli",
-      );
-      // The writer now emits the official flat `model.*` block (provider
-      // "custom" + a DashScope/Token Plan base_url); keep detecting legacy
-      // custom_providers entries written by older CLI versions.
-      const model = asRecord(config?.model);
-      const flatConfigured = Boolean(
-        model &&
-        model.provider === "custom" &&
-        typeof model.base_url === "string" &&
-        model.base_url.includes("aliyuncs.com"),
-      );
-      return {
-        configured: legacyConfigured || flatConfigured,
-        model: model && typeof model.default === "string" ? model.default : undefined,
-      };
-    },
-  },
-  {
     id: "codex",
     label: "Codex",
     paths: (h) => [join(h, ".codex", "config.toml"), join(h, ".codex", "auth.json")],
@@ -897,24 +863,6 @@ function agentDetailFields(id: string, home: string): AgentField[] {
     pushField(out, "Base URL", bailian?.baseUrl);
     pushField(out, "API", bailian?.api);
     pushField(out, "API Key", bailian?.apiKey, true);
-  } else if (id === "hermes") {
-    const text = readText(join(home, ".hermes", "config.yaml"));
-    let config: Record<string, unknown> | undefined;
-    if (text) {
-      try {
-        config = asRecord(yaml.parse(text));
-      } catch {
-        config = undefined;
-      }
-    }
-    const providers = Array.isArray(config?.custom_providers) ? config.custom_providers : [];
-    const pr = asRecord(providers.find((e: unknown) => asRecord(e)?.name === "bailian-cli"));
-    const list = Array.isArray(pr?.models) ? pr.models : [];
-    const first = asRecord(list[0]);
-    pushField(out, "Model", first?.id ?? asRecord(config?.model)?.default);
-    pushField(out, "Base URL", pr?.base_url);
-    pushField(out, "API Mode", pr?.api_mode);
-    pushField(out, "API Key", pr?.api_key, true);
   } else if (id === "codex") {
     const text = readText(join(home, ".codex", "config.toml"));
     let config: Record<string, unknown> = {};

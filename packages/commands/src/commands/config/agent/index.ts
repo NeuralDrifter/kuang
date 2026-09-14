@@ -1,4 +1,3 @@
-import { platform } from "os";
 import { defineCommand, detectOutputFormat, maskToken, type FlagsDef } from "bailian-cli-core";
 import { emitResult, emitBare } from "bailian-cli-runtime";
 import { AGENTS, VALID_AGENT_NAMES, type WriteParams } from "./writers.ts";
@@ -104,13 +103,6 @@ export default defineCommand({
     const apiKey = flags.key ? decodeTokenPlanKey(flags.key) : flags.apiKey!;
     const agentDef = AGENTS[agentName];
     const format = detectOutputFormat(settings.output);
-
-    // Hermes has no native Windows support.
-    if (agentName === "hermes" && platform() === "win32") {
-      process.stderr.write(
-        "Warning: Hermes Agent does not support native Windows. Please use WSL2.\n",
-      );
-    }
 
     if (settings.dryRun) {
       emitResult(

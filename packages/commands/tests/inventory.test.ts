@@ -168,19 +168,6 @@ test("listAgents 报告安装与已连接 bailian-cli 的状态", () => {
         model: { name: "qwen3-coder-plus" },
       }),
     );
-    // Hermes: configured via the official flat model block (no custom_providers).
-    write(
-      home,
-      ".hermes/config.yaml",
-      [
-        "model:",
-        "  default: qwen3-max",
-        "  provider: custom",
-        "  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "  api_key: sk-test",
-      ].join("\n"),
-    );
-
     const agents = listAgents(home);
     const byId = Object.fromEntries(agents.map((a) => [a.id, a]));
 
@@ -199,11 +186,6 @@ test("listAgents 报告安装与已连接 bailian-cli 的状态", () => {
       installed: true,
       configured: true,
       model: "qwen3-coder-plus",
-    });
-    expect(byId.hermes).toMatchObject({
-      installed: true,
-      configured: true,
-      model: "qwen3-max",
     });
     expect(byId.opencode).toMatchObject({
       installed: false,

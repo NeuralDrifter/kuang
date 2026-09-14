@@ -5,7 +5,6 @@ import claudeCode from "./writers/claude-code.ts";
 import qwenCode from "./writers/qwen-code.ts";
 import opencode from "./writers/opencode.ts";
 import openclaw from "./writers/openclaw.ts";
-import hermes from "./writers/hermes.ts";
 import codex from "./writers/codex.ts";
 
 export const AGENTS: Record<string, AgentDef> = {
@@ -13,7 +12,6 @@ export const AGENTS: Record<string, AgentDef> = {
   "qwen-code": qwenCode,
   opencode,
   openclaw,
-  hermes,
   codex,
 };
 

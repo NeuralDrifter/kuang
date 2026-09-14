@@ -79,7 +79,8 @@ test("agents: registry mirrors upstream agent list minus non-symlinkable agents"
     const ids = getAgentTargets().map((agent) => agent.id);
     expect(ids).toContain("universal");
     expect(ids).toContain("universal-xdg");
-    expect(getAgentTargets()).toHaveLength(65);
+    // 64, not upstream's 65: this fork drops Hermes Agent.
+    expect(getAgentTargets()).toHaveLength(64);
     // eve (no global dir, upstream forces direct writes) and promptscript (project-only)
     // cannot participate in global symlink fan-out
     expect(ids).not.toContain("eve");
@@ -165,16 +166,14 @@ test("agents: OpenClaw historical alias dirs are detected and link into the exis
   });
 });
 
-test("agents: VIBE_HOME/HERMES_HOME/AUTOHAND_HOME/GROK_HOME relocate their agents", async () => {
+test("agents: VIBE_HOME/AUTOHAND_HOME/GROK_HOME relocate their agents", async () => {
   await inFakeHome(async (home) => {
     const customDirs = {
       "mistral-vibe": join(home, "custom-vibe"),
-      hermes: join(home, "custom-hermes"),
       "autohand-code": join(home, "custom-autohand"),
       grok: join(home, "custom-grok"),
     };
     process.env.VIBE_HOME = customDirs["mistral-vibe"];
-    process.env.HERMES_HOME = customDirs.hermes;
     process.env.AUTOHAND_HOME = customDirs["autohand-code"];
     process.env.GROK_HOME = customDirs.grok;
     for (const dir of Object.values(customDirs)) {

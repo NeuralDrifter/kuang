@@ -16,7 +16,7 @@ test("agentCommand 返回已知 agent 的可执行命令,未知返回 undefined"
 
 test("AGENT_COMMANDS 覆盖所有已知 agent id", () => {
   expect(Object.keys(AGENT_COMMANDS).sort()).toEqual(
-    ["claude-code", "codex", "hermes", "opencode", "openclaw", "qwen-code"].sort(),
+    ["claude-code", "codex", "opencode", "openclaw", "qwen-code"].sort(),
   );
 });
 

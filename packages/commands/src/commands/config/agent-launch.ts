@@ -13,7 +13,6 @@ export const AGENT_COMMANDS: Record<string, string> = {
   "qwen-code": "qwen",
   opencode: "opencode",
   openclaw: "openclaw",
-  hermes: "hermes",
   codex: "codex",
 };
 

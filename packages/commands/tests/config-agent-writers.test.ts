@@ -6,7 +6,6 @@ import claudeCode from "../src/commands/config/agent/writers/claude-code.ts";
 import qwenCode from "../src/commands/config/agent/writers/qwen-code.ts";
 import opencode from "../src/commands/config/agent/writers/opencode.ts";
 import openclaw from "../src/commands/config/agent/writers/openclaw.ts";
-import hermes from "../src/commands/config/agent/writers/hermes.ts";
 import codex from "../src/commands/config/agent/writers/codex.ts";
 import { resolveRegionBaseUrl } from "../src/commands/config/agent/writers/utils.ts";
 import yaml from "yaml";
@@ -458,46 +457,6 @@ describe("config agent writers", () => {
     expect(summary.warnings?.some((warning) => warning.includes("Left existing primary"))).toBe(
       true,
     );
-  });
-
-  test("hermes 写入官方扁平 model.* 结构，保留其它顶层键", () => {
-    mkdirSync(join(home, ".hermes"), { recursive: true });
-    writeFileSync(
-      join(home, ".hermes", "config.yaml"),
-      yaml.stringify({
-        custom_providers: [{ name: "other", base_url: "https://x" }],
-      }),
-    );
-
-    hermes.write({
-      baseUrl: OAI_URL,
-      apiKey: "sk-h",
-      model: "qwen3-coder-plus",
-    });
-    const config = yaml.parse(readFileSync(join(home, ".hermes", "config.yaml"), "utf8"));
-    // OpenAI 兼容端点：按官方文档省略 api_mode；无关顶层键不受影响
-    expect(config.model).toEqual({
-      default: "qwen3-coder-plus",
-      provider: "custom",
-      base_url: OAI_URL,
-      api_key: "sk-h",
-    });
-    expect(config.custom_providers).toHaveLength(1);
-
-    // anthropic 端点：必须带 api_mode = anthropic_messages
-    hermes.write({
-      baseUrl: ANTHROPIC_URL,
-      apiKey: "sk-h",
-      model: "qwen3-max",
-    });
-    const config2 = yaml.parse(readFileSync(join(home, ".hermes", "config.yaml"), "utf8"));
-    expect(config2.model).toEqual({
-      default: "qwen3-max",
-      provider: "custom",
-      base_url: ANTHROPIC_URL,
-      api_key: "sk-h",
-      api_mode: "anthropic_messages",
-    });
   });
 
   test("codex 写入 config.toml 与 auth.json（官方 env_key 结构，合并保留）", () => {

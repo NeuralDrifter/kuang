@@ -162,7 +162,6 @@ export function getAgentTargets(): AgentTarget[] {
       detectDirs: [join(xdgConfig, "goose")],
     },
     fromBase("grok", "Grok Build", envBase(process.env.GROK_HOME, ".grok")),
-    fromBase("hermes", "Hermes Agent", envBase(process.env.HERMES_HOME, ".hermes")),
     simple("iflow-cli", "iFlow CLI", ".iflow"),
     simple("inference-sh", "inference.sh", ".inferencesh"),
     {

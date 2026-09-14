@@ -757,36 +757,4 @@ describe("e2e: config", () => {
       rmSync(home, { recursive: true, force: true });
     }
   });
-
-  test("config agent hermes 写入官方扁平 model.* 结构", async () => {
-    const home = mkdtempSync(join(tmpdir(), "bl-config-agent-hermes-"));
-    try {
-      const { stderr, exitCode } = await runCommandE2e(
-        CONFIG_ROUTES,
-        [
-          "config",
-          "agent",
-          "--agent",
-          "hermes",
-          "--base-url",
-          "https://dashscope.aliyuncs.com/compatible-mode/v1",
-          "--api-key",
-          "sk-hermes-placeholder",
-          "--model",
-          "qwen3-coder-plus",
-        ],
-        { HOME: home, USERPROFILE: home },
-      );
-      expect(exitCode, stderr).toBe(0);
-      const yamlText = readFileSync(join(home, ".hermes", "config.yaml"), "utf8");
-      expect(yamlText).toContain("default: qwen3-coder-plus");
-      expect(yamlText).toContain("provider: custom");
-      expect(yamlText).toContain("base_url: https://dashscope.aliyuncs.com/compatible-mode/v1");
-      expect(yamlText).toContain("api_key: sk-hermes-placeholder");
-      // OpenAI 兼容端点不写 api_mode
-      expect(yamlText).not.toContain("api_mode");
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
 });
