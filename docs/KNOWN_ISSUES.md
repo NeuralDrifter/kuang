@@ -7,7 +7,7 @@ says what it is, why it matters, and what fixing it looks like.
 fixed on the spot; move entries to _Fixed_ rather than deleting them, so the
 history of what went wrong stays readable.
 
-Last reviewed against `af517ec` on 2026-09-13. Nothing here is a surprise —
+Last reviewed against `6b92159` on 2026-09-13. Nothing here is a surprise —
 these were found during development and deliberately deferred rather than
 missed.
 
@@ -119,6 +119,26 @@ probed on Windows, but the moment the probe list grows this becomes real.
 
 ---
 
+### 2.6 Input arriving faster than one line per prompt is silently dropped
+
+**Where:** `packages/agent/src/index.ts`, the `readLine` loop
+
+`readline.question()` consumes one line and discards any others that arrived in
+the same chunk, because nothing is listening between questions. So:
+
+- **Pasting a multi-line message** — a stack trace, a diff, a log — sends only
+  the first line to the model, and the rest vanish with no indication.
+- **Piping a script** of commands runs only the first one.
+
+Found while smoke-testing the slash commands: a feed of seven commands executed
+two. It is not new, but it is worse than it looks, because paste is how people
+hand an agent an error message.
+
+**Fix:** keep a `line` listener on the interface and push into a queue that
+`readLine` drains, so lines buffer instead of being dropped. Multi-line paste
+also wants to be treated as one message rather than several prompts, which is
+a question for the Ink work.
+
 ## 3. Not verified
 
 ### 3.1 Live media responses
@@ -144,22 +164,18 @@ a file actually lands in the project, and confirm the tool returns its path.
 Approval prompts cannot be answered through a pipe — EOF is correctly treated
 as deny — so this has to be done by hand.
 
-### 3.2 The redaction vault is built but not wired
+### 3.2 Redaction has never run against a live model
 
-The validators, rules, vault and stream restorer exist and are tested. Nothing
-calls them yet — the loop does not sanitize, and there is no `--redact` flag or
-`/pii` command. Until that lands none of the protection is active, and the
-secret-file denylist is the only thing between the model and a credential.
+The vault is wired into the loop and driven by `/pii`, and the unit tests cover
+the boundary with a scripted transport. What has not happened is a real
+conversation with real secrets in it: whether Qwen actually copies a
+`[REDACTED_CARD_1]` through a tool argument unchanged, rather than paraphrasing
+it, reformatting it, or objecting to it, is a property of the model and cannot
+be asserted in a test.
 
-Tracked in [design/stage-3-redaction.md](design/stage-3-redaction.md), tasks 5
-through 7.
-
-This is also what closes the shell hole. The secret-file denylist only guards
-`read_file`, so `cat .env` returns the contents today — but shell output comes
-back as a tool result and passes through the loop like any other, so wiring the
-vault filters it along with everything else. Content redaction is the better
-mechanism regardless: a filename list cannot see the credential pasted into
-`config.ts`.
+**Check before relying on it:** whether the model preserves placeholders
+verbatim in tool arguments, and whether it follows the system prompt's
+instruction to say it cannot read one instead of guessing.
 
 ### 3.3 Localization is not complete
 

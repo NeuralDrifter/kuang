@@ -22,6 +22,7 @@
  *   passport, a prefixed short SHA, and a thousand identifiers. No checksum
  *   exists to separate them.
  */
+import type { LocalizedText } from "bailian-cli-core";
 import {
   iso7064Mod11_2,
   iso7064Mod97_10,
@@ -35,6 +36,12 @@ import {
 export interface RedactionRule {
   /** Stable id, used in the placeholder: `[REDACTED_CARD_1]`. */
   id: string;
+  /**
+   * What this rule covers, for `/pii`. It lives on the rule so the coverage
+   * the user is shown is the coverage that actually runs — a second list kept
+   * elsewhere would drift the first time a rule is added.
+   */
+  label: LocalizedText;
   /** Global regex. Must not use sticky or the scan misbehaves. */
   pattern: RegExp;
   /** Final say. A match without a passing validator is left alone. */
@@ -90,18 +97,21 @@ export const RULES: RedactionRule[] = [
   {
     // Whole armoured block, so the key body never reaches the model.
     id: "PRIVATE_KEY",
+    label: { "en-US": "Private keys", "zh-CN": "私钥" },
     pattern: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
   },
   {
     // Known credential prefixes. The prefix does the work; entropy rejects
     // placeholders like `sk-xxxxxxxxxxxxxxxx` that appear in documentation.
     id: "TOKEN",
+    label: { "en-US": "API tokens and keys", "zh-CN": "API 令牌与密钥" },
     pattern:
       /\b(?:sk-[A-Za-z0-9_.-]{16,}|ghp_[A-Za-z0-9]{20,}|gho_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[A-Za-z0-9_-]{30,})/g,
     validate: (m) => shannonEntropy(m) >= TOKEN_ENTROPY_FLOOR,
   },
   {
     id: "CARD",
+    label: { "en-US": "Payment card numbers", "zh-CN": "银行卡号" },
     // 13–19 digits, optionally grouped. Anchored so it cannot sit inside a
     // longer run of digits.
     pattern: /(?<![\d-])(?:\d[ -]?){12,18}\d(?![\d-])/g,
@@ -116,6 +126,7 @@ export const RULES: RedactionRule[] = [
   },
   {
     id: "IBAN",
+    label: { "en-US": "IBAN bank accounts", "zh-CN": "IBAN 银行账号" },
     pattern: /\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){2,7}[ ]?[A-Z0-9]{0,4}\b/g,
     validate: (m) => {
       const s = m.replace(/\s/g, "").toUpperCase();
@@ -126,6 +137,7 @@ export const RULES: RedactionRule[] = [
   },
   {
     id: "CN_ID",
+    label: { "en-US": "Chinese resident ID numbers", "zh-CN": "中国居民身份证号" },
     pattern: /(?<!\d)\d{17}[\dXx](?!\d)/g,
     validate: (m) => {
       if (!iso7064Mod11_2(m)) return false;
@@ -138,11 +150,13 @@ export const RULES: RedactionRule[] = [
   },
   {
     id: "FR_NIR",
+    label: { "en-US": "French social security numbers", "zh-CN": "法国社会保障号" },
     pattern: /(?<!\d)[12]\d{2}(?:0[1-9]|1[0-2])(?:\d{2}|2[AB])\d{6}\d{2}(?!\d)/g,
     validate: nirKey,
   },
   {
     id: "SG_NRIC",
+    label: { "en-US": "Singapore NRIC and FIN numbers", "zh-CN": "新加坡身份证号" },
     pattern: /\b[STFGMstfgm]\d{7}[A-Za-z]\b/g,
     validate: nricChecksum,
   },
@@ -151,6 +165,7 @@ export const RULES: RedactionRule[] = [
     // the nine-digit space, so on an arbitrary id they would be wrong far more
     // often than right.
     id: "US_SSN",
+    label: { "en-US": "US Social Security numbers", "zh-CN": "美国社会安全号" },
     pattern: /\b\d{3}-\d{2}-\d{4}\b/g,
     validate: ssnStructurallyValid,
   },
@@ -158,6 +173,7 @@ export const RULES: RedactionRule[] = [
     // Separators required, and Luhn. Luhn alone passes one nine-digit number
     // in ten, so without the separator this was the worst rule in the old set.
     id: "CA_SIN",
+    label: { "en-US": "Canadian Social Insurance numbers", "zh-CN": "加拿大社会保险号" },
     pattern: /\b\d{3}[ -]\d{3}[ -]\d{3}\b/g,
     validate: (m) => luhn(d(m)),
   },
@@ -165,6 +181,7 @@ export const RULES: RedactionRule[] = [
     // The prefix charset already excludes D, F, I, Q, U, V and the reserved
     // combinations; the suffix is A–D.
     id: "UK_NINO",
+    label: { "en-US": "UK National Insurance numbers", "zh-CN": "英国国民保险号" },
     pattern: /\b[ABCEGHJ-PRSTW-Z][ABCEGHJ-NPRSTW-Z] ?\d{2} ?\d{2} ?\d{2} ?[A-D]\b/g,
     validate: (m) => {
       const s = m.replace(/\s/g, "").toUpperCase();
@@ -173,6 +190,7 @@ export const RULES: RedactionRule[] = [
   },
   {
     id: "EU_VAT",
+    label: { "en-US": "EU VAT registration numbers", "zh-CN": "欧盟增值税号" },
     pattern:
       /\b(?:ATU\d{8}|BE0\d{9}|BG\d{9,10}|CY\d{8}[A-Z]|CZ\d{8,10}|DE\d{9}|DK\d{8}|EE\d{9}|EL\d{9}|ES[A-Z0-9]\d{7}[A-Z0-9]|FI\d{8}|FR[A-Z0-9]{2}\d{9}|HR\d{11}|HU\d{8}|IE\d[A-Z0-9]\d{5}[A-Z]|IT\d{11}|LT(?:\d{9}|\d{12})|LU\d{8}|LV\d{11}|MT\d{8}|NL\d{9}B\d{2}|PL\d{10}|PT\d{9}|RO\d{2,10}|SE\d{12}|SI\d{8}|SK\d{10})\b/g,
   },
@@ -180,15 +198,18 @@ export const RULES: RedactionRule[] = [
     // No checksum exists, so the boundaries do the work: not adjacent to any
     // other digit, and not part of a longer identifier.
     id: "CN_MOBILE",
+    label: { "en-US": "Chinese mobile numbers", "zh-CN": "中国手机号" },
     pattern: /(?<![\d-])1[3-9]\d{9}(?![\d-])/g,
   },
   {
     // Separators required, and a valid NANP area and exchange code.
     id: "NANP_PHONE",
+    label: { "en-US": "US and Canadian phone numbers", "zh-CN": "美加电话号码" },
     pattern: /(?<![\d-])(?:\+?1[ -])?\(?[2-9]\d{2}\)?[ -][2-9]\d{2}[ -]\d{4}(?![\d-])/g,
   },
   {
     id: "EMAIL",
+    label: { "en-US": "Email addresses", "zh-CN": "电子邮件地址" },
     pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+\b/g,
     // Example domains are documentation, not personal data.
     validate: (m) => !/@(?:example|test|invalid|localhost)\./i.test(m),
