@@ -11,17 +11,70 @@
  * `glob` and `grep` are tier `auto`.
  */
 import { mkdir, open, readFile, stat, writeFile } from "node:fs/promises";
-import { readdirSync } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { readdirSync, realpathSync } from "node:fs";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import type { Tool } from "./registry.ts";
 import type { ToolPreview } from "../events.ts";
 
-/** Resolve a project-relative path against `root`, refusing any escape. */
+/** Whether `target` is `root` itself or sits underneath it. */
+function contains(root: string, target: string): boolean {
+  return target === root || target.startsWith(root + sep);
+}
+
+/**
+ * The real path of `target`, or of its deepest existing ancestor with the
+ * missing tail appended.
+ *
+ * `write_file` creates files that do not exist yet, so plain `realpathSync`
+ * would throw ENOENT on every new file. Resolving the deepest existing
+ * ancestor is enough for containment: only a path segment that exists can be
+ * a symlink, so no unresolved link can hide in the tail.
+ */
+function realpathOrNearest(target: string): string {
+  const missing: string[] = [];
+  let current = target;
+
+  for (;;) {
+    try {
+      const real = realpathSync(current);
+      return missing.length === 0 ? real : join(real, ...missing);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+      const parent = dirname(current);
+      // Reached the filesystem root without finding anything that exists.
+      if (parent === current) return target;
+      missing.unshift(basename(current));
+      current = parent;
+    }
+  }
+}
+
+/**
+ * Resolve a project-relative path against `root`, refusing any escape.
+ *
+ * Two checks, because the lexical one alone is not containment. `../` and
+ * absolute paths are caught by comparing resolved strings, but a **symlink
+ * inside the project can point anywhere**, and `read_file` is tier `auto` —
+ * it runs with no prompt. Cloning a repository containing a link named
+ * `notes.txt` that points at `~/.ssh/id_rsa` would otherwise be enough to
+ * read the key.
+ *
+ * The root is resolved too: it can itself be reached through a link (a
+ * checkout under a symlinked home, `/tmp` on macOS), and comparing a real
+ * path against a lexical root would then reject every legitimate file.
+ *
+ * The lexical path is what gets returned, so callers keep showing the user
+ * the path they asked about rather than wherever it happens to live.
+ */
 function resolveInProject(root: string, path: string): string {
   const resolvedRoot = resolve(root);
   const resolvedPath = resolve(resolvedRoot, path);
-  if (resolvedPath !== resolvedRoot && !resolvedPath.startsWith(resolvedRoot + sep)) {
+  if (!contains(resolvedRoot, resolvedPath)) {
     throw new Error(`Path is outside the project: ${path}`);
+  }
+
+  if (!contains(realpathOrNearest(resolvedRoot), realpathOrNearest(resolvedPath))) {
+    throw new Error(`Path escapes the project through a link: ${path}`);
   }
   return resolvedPath;
 }

@@ -241,17 +241,18 @@ only the binary name changed.
 
 ## Security
 
-The agent runs commands a language model proposed, on your machine. Two known
-limitations, both deliberate and both tracked:
+The agent runs commands a language model proposed, on your machine. One known
+limitation, deliberate and tracked:
 
-1. **Approval patterns generalise by command prefix.** A rule derived from
-   `rm -f build/tmp.txt` also permits `rm -f -r /`. Contained today only because
-   approvals are in-memory per session and never persisted. A denylist of
-   never-generalisable commands must land _with_ persistence, not after it.
-2. **Symlinks are followed.** `read_file` runs without approval and does not call
-   `realpath`, so a symlink inside a repository can point outside it.
+**Approval patterns generalise by command prefix.** A rule derived from
+`rm -f build/tmp.txt` also permits `rm -f -r /`. Contained today only because
+approvals are in-memory per session and never persisted. A denylist of
+never-generalisable commands must land _with_ persistence, not after it.
 
-Do not run this against a repository you do not trust.
+Path containment resolves symlinks: `../`, absolute paths, and links or
+junctions pointing out of the project are all refused, on the project root as
+well as the target, so a checkout reached through a link still works. Links
+that stay inside the project resolve normally.
 
 `--redact` reduces what a model sees, but it is a filter, not a boundary — see
 above for what it does and does not promise.

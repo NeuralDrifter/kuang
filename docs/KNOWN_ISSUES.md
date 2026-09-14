@@ -41,26 +41,6 @@ always prompt, every time.
 > persistence, never after it.** The moment rules survive a restart, the
 > containment above disappears.
 
-### 1.2 Symlinks are followed out of the project
-
-**Where:** `packages/agent/src/core/tools/fs.ts`, `resolveInProject`
-
-Path containment resolves against the project root correctly — traversal,
-absolute paths, UNC paths and prefix collisions (`/proj` vs `/proj-evil`) are
-all refused. But nothing calls `realpath`, so a **symlink inside the repository
-pointing outside it** is followed.
-
-`read_file` is auto-tier, so this happens with no prompt: cloning a hostile
-repository containing a symlink to `~/.ssh/id_rsa` is enough to exfiltrate it.
-
-`glob` and `grep` are incidentally immune — their walk uses `isDirectory()` /
-`isFile()`, which are false for symlinks — but that is luck, not design.
-
-**Fix:** `realpath` the resolved path before the containment check, in
-`read_file`, `write_file` and `edit_file`.
-
----
-
 ## 2. Correctness
 
 ### 2.1 `~` is not treated as shell chaining
@@ -291,6 +271,7 @@ Kept rather than deleted, so the record shows what went wrong and when.
 
 | Found      | Issue                                                                                                                                                                                                                                                | Fixed in  |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 2026-09-14 | A symlink or junction inside the project was followed out of it, and `read_file` is tier `auto` — cloning a hostile repository was enough to read `~/.ssh/id_rsa` with no prompt                                                                     | `pending` |
 | 2026-09-14 | The formatter and `generate-reference.ts` both claimed `skills/*/reference`, so each commit left 34 files dirty — and the formatter escaped markdown inside flag docs, teaching the model config keys that do not exist (`base*url` for `base_url`)  | `pending` |
 | 2026-09-13 | `config.e2e.test.ts` set only `HOME` to isolate the child CLI, so on Windows it wrote agent configs into the developer's real home directory — it overwrote `~/.codex/config.toml`, `~/.codex/auth.json` and `~/.hermes/config.yaml` on this machine | pending   |
 | 2026-09-13 | `glob` emitted only files, so the agent reported "there are no subdirectories" when there were six                                                                                                                                                   | `92e3244` |

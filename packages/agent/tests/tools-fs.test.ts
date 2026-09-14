@@ -2,7 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { expect, test } from "vite-plus/test";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  symlinkSync,
+  existsSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fsTools } from "../src/core/tools/fs.ts";
@@ -210,3 +217,121 @@ test("secret files are hidden from glob and grep", async () => {
   // grep must not leak the contents either.
   expect(await tool(root, "grep").run({ pattern: "sk-real" })).not.toContain("sk-real-secret");
 });
+
+// ── symlink containment ─────────────────────────────────────────────────────
+//
+// The lexical check catches `../` and absolute paths. It cannot catch a link
+// inside the project pointing out of it, and `read_file` is tier `auto`, so
+// that path runs with no prompt at all.
+
+/** Windows needs Developer Mode or admin to create symlinks. Skip, don't fail. */
+const CAN_SYMLINK = (() => {
+  try {
+    const probe = mkdtempSync(join(tmpdir(), "kuang-link-"));
+    writeFileSync(join(probe, "target"), "x", "utf-8");
+    symlinkSync(join(probe, "target"), join(probe, "link"));
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+test.skipIf(!CAN_SYMLINK)(
+  "read_file refuses a symlink that points out of the project",
+  async () => {
+    const outside = mkdtempSync(join(tmpdir(), "kuang-outside-"));
+    writeFileSync(join(outside, "id_rsa"), "PRIVATE KEY", "utf-8");
+
+    const root = sandbox();
+    // Exactly the hostile-repository case: an innocuous name, a link body.
+    symlinkSync(join(outside, "id_rsa"), join(root, "notes.txt"));
+
+    await expect(tool(root, "read_file").run({ path: "notes.txt" })).rejects.toThrow(/link/i);
+  },
+);
+
+test.skipIf(!CAN_SYMLINK)("write_file refuses to write through an escaping symlink", async () => {
+  const outside = mkdtempSync(join(tmpdir(), "kuang-outside-"));
+  writeFileSync(join(outside, "authorized_keys"), "", "utf-8");
+
+  const root = sandbox();
+  symlinkSync(join(outside, "authorized_keys"), join(root, "keys.txt"));
+
+  await expect(
+    tool(root, "write_file").run({ path: "keys.txt", content: "ssh-rsa AAAA" }),
+  ).rejects.toThrow(/link/i);
+  // The file outside must be untouched, not merely un-returned.
+  expect(readFileSync(join(outside, "authorized_keys"), "utf-8")).toBe("");
+});
+
+test.skipIf(!CAN_SYMLINK)("a symlink that stays inside the project still resolves", async () => {
+  const root = sandbox();
+  symlinkSync(join(root, "src", "a.ts"), join(root, "alias.ts"));
+
+  // Containment, not a ban on links.
+  expect(await tool(root, "read_file").run({ path: "alias.ts" })).toBe("export const a = 1;\n");
+});
+
+test.skipIf(!CAN_SYMLINK)("a project reached through a symlinked root still works", async () => {
+  const real = sandbox();
+  const parent = mkdtempSync(join(tmpdir(), "kuang-linkroot-"));
+  const linked = join(parent, "project");
+  symlinkSync(real, linked, "junction");
+
+  // Resolving the file but not the root would make every file look external:
+  // a checkout under a symlinked home, or anything under /tmp on macOS.
+  expect(await tool(linked, "read_file").run({ path: "src/a.ts" })).toBe("export const a = 1;\n");
+});
+
+test("write_file still creates a file that does not exist yet", async () => {
+  const root = sandbox();
+
+  // realpath throws ENOENT on a path that isn't there, so containment has to
+  // resolve the deepest existing ancestor instead of the target itself.
+  await tool(root, "write_file").run({ path: "src/deep/new/file.ts", content: "ok\n" });
+  expect(readFileSync(join(root, "src", "deep", "new", "file.ts"), "utf-8")).toBe("ok\n");
+});
+
+/**
+ * Windows refuses unprivileged symlinks but allows directory junctions, and a
+ * junction escapes the project exactly the same way. Without this, the
+ * containment check ships untested on the platform being developed on.
+ */
+const CAN_JUNCTION = (() => {
+  try {
+    const probe = mkdtempSync(join(tmpdir(), "kuang-junction-"));
+    mkdirSync(join(probe, "target"));
+    symlinkSync(join(probe, "target"), join(probe, "link"), "junction");
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+test.skipIf(!CAN_JUNCTION)(
+  "read_file refuses a path under a directory link that escapes",
+  async () => {
+    const outside = mkdtempSync(join(tmpdir(), "kuang-outside-"));
+    writeFileSync(join(outside, "id_rsa"), "PRIVATE KEY", "utf-8");
+
+    const root = sandbox();
+    symlinkSync(outside, join(root, "vendor"), "junction");
+
+    await expect(tool(root, "read_file").run({ path: "vendor/id_rsa" })).rejects.toThrow(/link/i);
+  },
+);
+
+test.skipIf(!CAN_JUNCTION)(
+  "write_file refuses to create a file under an escaping directory link",
+  async () => {
+    const outside = mkdtempSync(join(tmpdir(), "kuang-outside-"));
+    const root = sandbox();
+    symlinkSync(outside, join(root, "vendor"), "junction");
+
+    // The target does not exist, so this also covers the nearest-ancestor path.
+    await expect(
+      tool(root, "write_file").run({ path: "vendor/planted.sh", content: "rm -rf /" }),
+    ).rejects.toThrow(/link/i);
+    expect(existsSync(join(outside, "planted.sh"))).toBe(false);
+  },
+);
