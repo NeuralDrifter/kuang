@@ -16,7 +16,7 @@ import { ApprovalStore } from "./core/approvals.ts";
 import { loadApprovals, saveApprovals } from "./core/approvals-file.ts";
 import { createMessageReader } from "./core/input.ts";
 import type { ApprovalDecision } from "./core/approvals.ts";
-import type { EventSink } from "./core/events.ts";
+import type { AgentEvent, EventSink } from "./core/events.ts";
 import { runTurn } from "./core/loop.ts";
 import type { ApprovalAsker } from "./core/loop.ts";
 import type { AgentMessage } from "./core/messages.ts";
@@ -530,22 +530,27 @@ function persist(session: Session, messages: AgentMessage[]): void {
  * the CLI both live on the product side — this package cannot reach either
  * without importing `commands`, which depends on it.
  */
-export async function runAgent(
+/**
+ * The plain-text path: readline for input, the plain renderer for output.
+ *
+ * Kept whole and unchanged as the Ink UI arrives beside it. Ink needs a TTY,
+ * and pipes, CI and every scripted test are not TTYs — a tool that only works
+ * when a human is watching is worse than one that also works in a pipe.
+ */
+async function runPlainAgent(
   ctx: CommandContext,
-  platform?: PlatformAccess,
-  options: AgentOptions = {},
+  cwd: string,
+  platform: PlatformAccess | undefined,
+  options: AgentOptions,
 ): Promise<void> {
-  const cwd = process.cwd();
-  // readline echoes typed characters to its `output`, so a stream that can be
-  // silenced is what keeps a passphrase off the screen.
   /**
    * Write to the terminal, remembering whether the cursor is at the start of
    * a line.
    *
-   * A command now runs the moment it is typed, which can be in the middle of
-   * the model streaming a word. Its output needs to begin on a fresh line
-   * rather than colliding with that, and only the writer knows where the
-   * cursor got to.
+   * A command runs the moment it is typed, which can be in the middle of the
+   * model streaming a word. Its output needs to begin on a fresh line rather
+   * than colliding with that, and only the writer knows where the cursor got
+   * to.
    */
   let atLineStart = true;
   const writeOut = (text: string): void => {
@@ -564,6 +569,8 @@ export async function runAgent(
   // streamed reply, so `atLineStart` reflects the real cursor position.
   const session = await buildSession(ctx, cwd, writeOut, platform, options);
 
+  // readline echoes typed characters to its `output`, so a stream that can be
+  // silenced is what keeps a passphrase off the screen.
   const output = new MutableOutput(process.stdout);
   const rl = createInterface({
     input: process.stdin,
@@ -571,21 +578,17 @@ export async function runAgent(
     terminal: process.stdin.isTTY ?? false,
   });
 
-  /**
-   * Not `rl.question`: that resolves with one line and discards anything else
-   * that arrived in the same chunk, so a pasted stack trace reached the model
-   * as its first line alone. The reader listens continuously and joins lines
-   * that arrive together into one message — see `core/input.ts`.
-   *
-   * The prompt is written here rather than passed to readline, because one
-   * prompt belongs to one message, not to each line of a paste.
-   */
-  // Slash commands are dispatched here, as lines arrive, rather than by the
-  // loop when it next asks for input. The user is not queued behind the model.
+  // Slash commands are dispatched as lines arrive rather than by the loop when
+  // it next asks for input, so the user is never queued behind the model.
   const deferred: Deferred = { exit: false, secrets: undefined };
   const nextMessage = createMessageReader(rl, {
     intercept: (message) => interceptCommand(message, session, deferred, writeOnFreshLine),
   });
+
+  /**
+   * The prompt is written here rather than passed to readline, because one
+   * prompt belongs to one message, not to each line of a paste.
+   */
   const readLine: ReadLine = async (prompt) => {
     process.stdout.write(prompt);
     return nextMessage();
@@ -599,4 +602,113 @@ export async function runAgent(
   } finally {
     rl.close();
   }
+}
+
+/** What the Ink status line needs to know, without handing it the whole session. */
+export interface InkSession {
+  id: string;
+  model: string;
+  redacting: boolean;
+}
+
+export interface InkWiring {
+  session: InkSession;
+  /** Run one turn, pushing each event to `emit` as it happens. */
+  onSubmit: (input: string, emit: (event: AgentEvent) => void) => Promise<void>;
+  /** Handle a slash command, or return undefined when it is a prompt. */
+  onCommand: (input: string) => { text?: string; exit?: boolean } | undefined;
+}
+
+/**
+ * Assemble the same session the plain path uses, exposed as the two callbacks
+ * the UI needs.
+ *
+ * The UI is handed functions rather than the session itself, so it cannot
+ * reach past them into the loop. Everything about how a turn runs stays on
+ * this side of the boundary, which is why `core/` did not have to change for
+ * a second renderer to exist.
+ */
+export async function buildInkSession(
+  ctx: CommandContext,
+  cwd: string,
+  platform: PlatformAccess | undefined,
+  options: AgentOptions,
+): Promise<InkWiring> {
+  // Events reach the UI through the sink, so the renderer here is a no-op;
+  // a real one would print underneath Ink's own drawing.
+  const session = await buildSession(ctx, cwd, () => {}, platform, options);
+
+  let messages = session.opening;
+  const deferred: Deferred = { exit: false, secrets: undefined };
+
+  const onSubmit = async (input: string, emit: (event: AgentEvent) => void): Promise<void> => {
+    const ask = buildAsk(async () => undefined); // approvals land in Task 4
+    messages = await takeTurn(messages, input, { ...session, sink: emit }, ask);
+    persist({ ...session, sink: emit }, messages);
+  };
+
+  const onCommand = (input: string): { text?: string; exit?: boolean } | undefined => {
+    const outcome = handleSlash(input.trim(), {
+      language: session.language,
+      vault: session.vault,
+      projectRoot: session.projectRoot,
+      sessionId: session.id,
+      savingSecrets: session.secrets !== undefined,
+    });
+
+    switch (outcome.kind) {
+      case "prompt":
+        return undefined;
+      case "handled":
+        return { text: outcome.text };
+      case "exit":
+        return { exit: true };
+      case "secrets":
+        deferred.secrets = outcome.action;
+        return { text: localize(SECRETS_AFTER_TURN, session.language) };
+    }
+  };
+
+  return {
+    session: { id: session.id, model: session.model, redacting: session.vault.enabled },
+    onSubmit,
+    onCommand,
+  };
+}
+
+/**
+ * Whether the terminal can host the Ink UI.
+ *
+ * Both halves matter and for different reasons: Ink draws by redrawing, which
+ * needs a real screen, and it reads input in raw mode, which needs a real
+ * keyboard. A pipe on either side means the plain path.
+ */
+function canRenderInk(): boolean {
+  return Boolean(process.stdout.isTTY) && Boolean(process.stdin.isTTY);
+}
+
+/**
+ * Run the interactive agent until the user leaves.
+ *
+ * `platform` is optional: without it the agent has local tools only. The
+ * launcher supplies it, because the command map and the ability to re-invoke
+ * the CLI both live on the product side — this package cannot reach either
+ * without importing `commands`, which depends on it.
+ */
+export async function runAgent(
+  ctx: CommandContext,
+  platform?: PlatformAccess,
+  options: AgentOptions = {},
+): Promise<void> {
+  const cwd = process.cwd();
+
+  if (!canRenderInk()) {
+    await runPlainAgent(ctx, cwd, platform, options);
+    return;
+  }
+
+  // Loaded only when it will be used, so a piped run never pays for React or
+  // touches a terminal library it cannot use.
+  const { runInkAgent } = await import("./ui/ink/app.tsx");
+  await runInkAgent(ctx, cwd, platform, options);
 }
