@@ -17,6 +17,7 @@
 import type { Language, LocalizedText } from "bailian-cli-core";
 import { localize } from "./i18n.ts";
 import { RULES } from "./redact/rules.ts";
+import { listSessions } from "./session.ts";
 import type { Vault } from "./redact/vault.ts";
 
 /** What the REPL should do with a line it just read. */
@@ -31,6 +32,10 @@ export type SlashOutcome =
 export interface SlashContext {
   language: Language;
   vault: Vault;
+  /** Which project's sessions `/sessions` lists. */
+  projectRoot?: string;
+  /** The session in progress, marked in the listing so it is obvious. */
+  sessionId?: string;
 }
 
 interface SlashCommand {
@@ -73,6 +78,16 @@ const TEXT = {
   unknown: {
     "en-US": "Unknown command: %s. Type /help to see what there is.",
     "zh-CN": "未知命令：%s。输入 /help 查看可用命令。",
+  },
+  sessionsHeader: { "en-US": "Sessions in this project", "zh-CN": "本项目的会话" },
+  noSessions: {
+    "en-US": "No saved sessions yet. One is written after your first reply.",
+    "zh-CN": "尚无已保存的会话。第一次回复后会自动保存。",
+  },
+  current: { "en-US": "(current)", "zh-CN": "（当前）" },
+  resumeHint: {
+    "en-US": "Reopen one with:  kuang agent --resume <id>",
+    "zh-CN": "使用以下命令恢复：kuang agent --resume <id>",
   },
   badArg: {
     "en-US": "Usage: /pii [on|off|list]",
@@ -153,6 +168,22 @@ function setRedaction(ctx: SlashContext, on: boolean): string {
   return piiStatus(ctx) + note;
 }
 
+/** This project's saved conversations, newest first. */
+function sessionList(ctx: SlashContext): string {
+  const t = translator(ctx.language);
+  if (!ctx.projectRoot) return t("noSessions");
+
+  const sessions = listSessions(ctx.projectRoot);
+  if (sessions.length === 0) return t("noSessions");
+
+  const rows = sessions.map((session): [string, string] => {
+    const mark = session.id === ctx.sessionId ? ` ${t("current")}` : "";
+    const when = session.updatedAt.slice(0, 16).replace("T", " ");
+    return [session.id + mark, `${when}  ${session.title || "—"}`];
+  });
+  return [t("sessionsHeader"), table(rows), "", t("resumeHint")].join("\n");
+}
+
 const COMMANDS: SlashCommand[] = [
   {
     names: ["help", "帮助", "?"],
@@ -167,6 +198,11 @@ const COMMANDS: SlashCommand[] = [
     },
     args: { "en-US": "[on|off|list]", "zh-CN": "[开启|关闭|列表]" },
     run: (args, ctx) => runPii(args[0]?.toLowerCase() ?? "", ctx),
+  },
+  {
+    names: ["sessions", "会话"],
+    summary: { "en-US": "List saved conversations", "zh-CN": "列出已保存的会话" },
+    run: (_args, ctx) => ({ kind: "handled", text: sessionList(ctx) }),
   },
   {
     names: ["exit", "退出", "quit"],

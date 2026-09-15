@@ -9,6 +9,11 @@
 import { expect, test } from "vite-plus/test";
 import { RULES } from "../src/core/redact/rules.ts";
 import { Vault } from "../src/core/redact/vault.ts";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { recordFor, saveSession } from "../src/core/session.ts";
+import { sessionsDir } from "../src/core/paths.ts";
 import { handleSlash, type SlashContext } from "../src/core/slash.ts";
 
 const CARD = "4111 1111 1111 1111";
@@ -188,4 +193,28 @@ test("the held count is grammatical at one and at many", () => {
 
   c.vault.sanitize("mike@realdomain.co.uk");
   expect(say("/pii", c)).toContain("2 values the model");
+});
+
+// ── /sessions · /会话 ───────────────────────────────────────────────────────
+
+test("sessions answers to both names", () => {
+  const c = ctx();
+  expect(say("/sessions", c)).toBe(say("/会话", c));
+});
+
+test("sessions is listed in help, in both languages", () => {
+  expect(say("/help")).toContain("/sessions");
+  expect(say("/help")).toContain("/会话");
+  expect(say("/帮助", ctx({ language: "zh-CN" }))).toContain("列出已保存的会话");
+});
+
+test("with no project root, sessions says there is nothing rather than guessing", () => {
+  // The context is optional, so the command must not assume it is there.
+  expect(say("/sessions")).toContain("No saved sessions");
+});
+
+test("an empty project lists nothing and says how one gets made", () => {
+  const text = say("/sessions", ctx({ projectRoot: mkdtempSync(join(tmpdir(), "kuang-empty-")) }));
+  expect(text).toContain("No saved sessions");
+  expect(text).toContain("after your first reply");
 });

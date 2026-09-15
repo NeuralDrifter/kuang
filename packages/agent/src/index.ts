@@ -22,6 +22,14 @@ import type { ApprovalAsker } from "./core/loop.ts";
 import type { AgentMessage } from "./core/messages.ts";
 import type { PlatformAccess } from "./core/platform.ts";
 import { Vault } from "./core/redact/vault.ts";
+import {
+  latestSession,
+  loadSession,
+  newSessionId,
+  recordFor,
+  saveSession,
+  type SessionRecord,
+} from "./core/session.ts";
 import { handleSlash } from "./core/slash.ts";
 import { bailianTools } from "./core/tools/bailian.ts";
 import { fsTools } from "./core/tools/fs.ts";
@@ -67,10 +75,22 @@ export interface AgentOptions {
    * is wrong has been misled, so switching it on should be a decision.
    */
   redact?: boolean;
+  /** Resume this session id. */
+  resume?: string;
+  /** Resume the most recent session for this project. */
+  continueLatest?: boolean;
 }
 
 /** Everything the loop needs, assembled once before it starts. */
 interface Session {
+  /** Where this conversation is filed. Fixed for the life of the process. */
+  id: string;
+  createdAt: string;
+  projectRoot: string;
+  /** The transcript to begin from: a system prompt, or a resumed history. */
+  opening: AgentMessage[];
+  /** One line to show before the first prompt, when something is worth saying. */
+  notice?: string;
   tools: ToolRegistry;
   approvals: ApprovalStore;
   vault: Vault;
@@ -116,6 +136,64 @@ function buildApprovals(cwd: string): ApprovalStore {
   });
 }
 
+const RESUMED: LocalizedText = {
+  "en-US": "Resumed %id (%n turns).",
+  "zh-CN": "已恢复会话 %id（%n 轮）。",
+};
+
+/** Only worth saying when the resumed history actually contains placeholders. */
+const RESUMED_REDACTED: LocalizedText = {
+  "en-US": " Values redacted before the restart can no longer be shown.",
+  "zh-CN": " 重启前脱敏的数据将无法再显示。",
+};
+
+const NO_SESSION: LocalizedText = {
+  "en-US": "No session to resume in this project. Starting a new one.",
+  "zh-CN": "本项目没有可恢复的会话，将开始新会话。",
+};
+
+/**
+ * Which stored session to reopen, if any.
+ *
+ * `--resume` names one; `--continue` takes the most recent for this project.
+ * Neither failing is worth refusing to start over — an id that no longer
+ * exists means starting fresh, with a line saying so.
+ */
+function sessionToResume(cwd: string, options: AgentOptions): SessionRecord | undefined {
+  if (options.resume) return loadSession(options.resume);
+  if (!options.continueLatest) return undefined;
+  const latest = latestSession(cwd);
+  return latest ? loadSession(latest.id) : undefined;
+}
+
+/**
+ * What to tell the user about a resume, if anything.
+ *
+ * Saying how many turns came back confirms the right conversation reopened.
+ * Saying that older redacted values cannot be shown is the honest part: the
+ * vault died with the previous process, so those placeholders are now just
+ * text — visible in the history, and refused if a tool is asked to write one.
+ */
+function resumeNotice(
+  resumed: SessionRecord | undefined,
+  options: AgentOptions,
+  language: Language,
+): string | undefined {
+  const asked = Boolean(options.resume || options.continueLatest);
+  if (!asked) return undefined;
+  if (!resumed) return localize(NO_SESSION, language);
+
+  const turns = resumed.messages.filter((m) => m.role === "user").length;
+  const text = localize(RESUMED, language).replace("%id", resumed.id).replace("%n", String(turns));
+
+  // The vault died with the previous process, so any placeholder in this
+  // history is now just text. Say so only when there is one to explain.
+  const PLACEHOLDER = /\[REDACTED_[A-Z_]+_\d+\]/;
+  return PLACEHOLDER.test(JSON.stringify(resumed.messages))
+    ? text + localize(RESUMED_REDACTED, language)
+    : text;
+}
+
 /** Wire the pieces together. Construction only: nothing here runs a turn. */
 async function buildSession(
   ctx: CommandContext,
@@ -124,7 +202,17 @@ async function buildSession(
   options: AgentOptions = {},
 ): Promise<Session> {
   const language = ctx.settings.language;
+  const resumed = sessionToResume(cwd, options);
+  const opening: AgentMessage[] = resumed?.messages ?? [
+    { role: "system", content: localize(SYSTEM_PROMPT, language) },
+  ];
+
   return {
+    notice: resumeNotice(resumed, options, language),
+    id: resumed?.id ?? newSessionId(),
+    createdAt: resumed?.createdAt ?? new Date().toISOString(),
+    projectRoot: cwd,
+    opening,
     tools: buildTools(cwd, language, await probeInterpreters(), platform),
     approvals: buildApprovals(cwd),
     // Always present so `/pii on` works mid-session, whatever it started as.
@@ -180,9 +268,8 @@ async function repl(
   write: (s: string) => void,
 ): Promise<void> {
   const ask = buildAsk(readLine);
-  let messages: AgentMessage[] = [
-    { role: "system", content: localize(SYSTEM_PROMPT, session.language) },
-  ];
+  let messages = session.opening;
+  if (session.notice) write(session.notice + "\n");
 
   for (;;) {
     const raw = await readLine("> ");
@@ -191,7 +278,12 @@ async function repl(
     const input = raw.trim();
     if (input === "") continue;
 
-    const slash = handleSlash(input, { language: session.language, vault: session.vault });
+    const slash = handleSlash(input, {
+      language: session.language,
+      vault: session.vault,
+      projectRoot: session.projectRoot,
+      sessionId: session.id,
+    });
     if (slash.kind === "exit") return;
     if (slash.kind === "handled") {
       write(slash.text + "\n");
@@ -199,6 +291,35 @@ async function repl(
     }
 
     messages = await takeTurn(messages, input, session, ask);
+    persist(session, messages);
+  }
+}
+
+/**
+ * Write the conversation out after each turn, not at exit: the usual way a
+ * session ends is a crash or a closed terminal, and neither runs cleanup.
+ *
+ * A failed write must not end the conversation in progress, so it is reported
+ * once and the turn stands.
+ */
+function persist(session: Session, messages: AgentMessage[]): void {
+  try {
+    saveSession(
+      recordFor(
+        {
+          id: session.id,
+          projectRoot: session.projectRoot,
+          model: session.model,
+          language: session.language,
+          createdAt: session.createdAt,
+        },
+        messages,
+        session.vault,
+      ),
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    session.sink({ type: "error", message: `Could not save the session: ${message}` });
   }
 }
 

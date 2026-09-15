@@ -62,7 +62,9 @@ verified; only the live media responses are untested, for want of credits.
 - **Redaction** (`--redact`) — secrets and personal data replaced with
   placeholders on the way to the model and put back on the way out, so the
   model can work with them without ever reading them
-- Bilingual slash commands — `/help` · `/帮助`, `/pii` · `/脱敏`, `/exit` · `/退出`
+- Bilingual slash commands — `/help` · `/帮助`, `/pii` · `/脱敏`, `/sessions` · `/会话`, `/exit` · `/退出`
+- **Sessions and approvals persist** — `--continue`, `--resume <id>`, and
+  "always allow" answers that outlive the terminal, scoped per project
 - 232 tests — 227 headless unit tests plus 5 that drive the real CLI
 
 **Wired but not verified against the live API**
@@ -79,7 +81,6 @@ be more that only a real response would reveal. Treat these three as untested.
 
 **Not yet**
 
-- Session persistence and `--resume`
 - Ink-based TUI — the current renderer is plain text
 - Full bilingual coverage — UI labels and tool descriptions are localized,
   some payload strings are not yet
@@ -152,6 +153,31 @@ won't ask again — but `rm -rf /` still will. Type `/exit` or press Ctrl+D to l
 Paste as much as you like. Lines that arrive together are read as one message,
 so a stack trace or a diff goes to the model whole and costs one turn rather
 than one per line.
+
+Conversations survive a restart. The transcript is written after each turn —
+not at exit, since the usual way a session ends is a crash or a closed
+terminal:
+
+```bash
+kuang agent --continue          # pick up the most recent one here
+kuang agent --resume <id>       # a particular one
+```
+
+`/sessions` · `/会话` lists this project's conversations, newest first, marking
+the one you are in. Sessions are filed per project, so a listing never mixes
+two repositories.
+
+**A session file holds the redacted transcript, not the live one.** The model
+only ever saw the redacted view, so resuming loses nothing it needs — and the
+file contains no secret as a property of what was written, rather than as a
+promise about a permission bit. The exception is honest: with `--redact` off
+nothing was ever captured, so the file holds whatever the conversation held.
+Redaction protects your session files too.
+
+One consequence worth knowing: the vault lives only in memory, so a placeholder
+issued before a restart cannot be turned back into its value afterwards. It
+stays visible as `[REDACTED_CARD_1]` in the history, and any tool asked to
+write one is refused rather than writing the placeholder text into a real file.
 
 It can also reach the platform. Ask for something it has no local tool for and
 it will find the command itself:

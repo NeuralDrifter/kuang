@@ -91,6 +91,21 @@ export function agentCommand(getCommands: () => Record<string, AnyCommand>) {
           "zh-CN": "对模型隐藏密钥与个人数据（可用 /脱敏 切换）",
         },
       },
+      continue: {
+        type: "switch",
+        description: {
+          "en-US": "Resume the most recent conversation in this project",
+          "zh-CN": "恢复本项目中最近的一次会话",
+        },
+      },
+      resume: {
+        type: "string",
+        valueHint: "<id>",
+        description: {
+          "en-US": "Resume a conversation by id (see /sessions)",
+          "zh-CN": "按 id 恢复会话（可用 /会话 查看）",
+        },
+      },
     },
     async run(ctx) {
       if (ctx.settings.dryRun) {
@@ -100,7 +115,11 @@ export function agentCommand(getCommands: () => Record<string, AnyCommand>) {
       }
 
       const platform: PlatformAccess = { commands: getCommands(), invoke };
-      await runAgent(ctx, platform, { redact: ctx.flags.redact });
+      await runAgent(ctx, platform, {
+        redact: ctx.flags.redact,
+        continueLatest: ctx.flags.continue,
+        resume: ctx.flags.resume,
+      });
     },
   });
 }
