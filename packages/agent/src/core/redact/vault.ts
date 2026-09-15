@@ -23,6 +23,14 @@ import { findMatches } from "./rules.ts";
 /** Issued placeholders match this exactly — case-sensitive, numbered. */
 const PLACEHOLDER = /\[REDACTED_[A-Z_]+_\d+\]/g;
 
+/** A vault's contents, as persisted. Holds real values — handle accordingly. */
+export interface VaultSnapshot {
+  /** Placeholder -> real value. */
+  values: Record<string, string>;
+  /** Next number issued per rule, so a resume cannot reissue one. */
+  counters: Record<string, number>;
+}
+
 export interface SanitizeResult {
   text: string;
   /** Occurrences replaced in this call, by rule id. For the user-facing notice. */
@@ -104,6 +112,37 @@ export class Vault {
   unresolved(text: string): string[] {
     const found = text.match(PLACEHOLDER) ?? [];
     return [...new Set(found.filter((token) => !this.toValue.has(token)))];
+  }
+
+  /**
+   * Everything needed to rebuild this vault, for callers that persist it.
+   *
+   * This is the one method that hands out real values, which is why it is
+   * named plainly rather than as a getter: `snapshot()` at a call site should
+   * read as "I am about to handle secrets".
+   */
+  snapshot(): VaultSnapshot {
+    return {
+      values: Object.fromEntries(this.toValue),
+      counters: Object.fromEntries(this.counters),
+    };
+  }
+
+  /**
+   * Merge a snapshot back in. Existing entries win: a value captured in this
+   * session is current, and a restored one may be stale.
+   */
+  absorb(snapshot: VaultSnapshot): void {
+    for (const [placeholder, value] of Object.entries(snapshot.values)) {
+      if (this.toValue.has(placeholder)) continue;
+      this.toValue.set(placeholder, value);
+      this.toPlaceholder.set(value, placeholder);
+    }
+    for (const [rule, n] of Object.entries(snapshot.counters)) {
+      // Never reuse a number: continuing from the higher of the two keeps
+      // placeholders unique across a resume.
+      this.counters.set(rule, Math.max(this.counters.get(rule) ?? 0, n));
+    }
   }
 
   /** Distinct values held, overall and by rule. */
