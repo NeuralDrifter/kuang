@@ -196,9 +196,16 @@ export function patternFor(tool: string, args: Record<string, unknown>): string 
 
 export class ApprovalStore {
   private ruleList: ApprovalRule[];
+  private readonly onChange: ((rules: ApprovalRule[]) => void) | undefined;
 
-  constructor(rules: ApprovalRule[] = []) {
+  /**
+   * `onChange` runs whenever a rule is added, so persistence can be wired in
+   * without this class knowing where files live or that they exist. A store
+   * built without it is exactly the in-memory store it always was.
+   */
+  constructor(rules: ApprovalRule[] = [], onChange?: (rules: ApprovalRule[]) => void) {
     this.ruleList = [...rules];
+    this.onChange = onChange;
   }
 
   /**
@@ -217,6 +224,9 @@ export class ApprovalStore {
     if (argPattern === undefined) return;
     if (this.ruleList.some((r) => r.tool === tool && r.argPattern === argPattern)) return;
     this.ruleList.push({ tool, argPattern });
+    // Persist immediately rather than at exit: the common way to lose an
+    // answer is the way a session is usually lost, which is not cleanly.
+    this.onChange?.(this.rules());
   }
 
   /** The current rules, for persistence to ~/.bailian/agent/approvals.json. */

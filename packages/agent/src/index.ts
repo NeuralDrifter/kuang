@@ -13,6 +13,7 @@
 import { createInterface } from "node:readline/promises";
 import type { CommandContext, LocalizedText } from "bailian-cli-core";
 import { ApprovalStore } from "./core/approvals.ts";
+import { loadApprovals, saveApprovals } from "./core/approvals-file.ts";
 import { createMessageReader } from "./core/input.ts";
 import type { ApprovalDecision } from "./core/approvals.ts";
 import { runTurn } from "./core/loop.ts";
@@ -91,8 +92,18 @@ export async function runAgent(
     for (const tool of bailianTools(platform, language)) tools.register(tool);
   }
 
-  // In-memory only: persistence to ~/.bailian/agent/approvals.json is Plan 2.
-  const approvals = new ApprovalStore();
+  // Rules are scoped to this project: an answer given here must not apply in
+  // some other repository. Saved as they are given rather than at exit, since
+  // the usual way a session ends is not cleanly.
+  const approvals = new ApprovalStore(loadApprovals(cwd), (rules) => {
+    try {
+      saveApprovals(cwd, rules);
+    } catch {
+      // A read-only or full disk must not break the turn in progress. The
+      // rule still applies for the rest of this session; it just will not
+      // outlive it, which is where we started.
+    }
+  });
 
   // Always present so `/pii on` works mid-session, whatever it started as.
   const vault = new Vault(options.redact ?? false);
