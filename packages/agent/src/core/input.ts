@@ -30,12 +30,28 @@ export interface LineSource {
 /** Reads the next message, or `undefined` once input has ended. */
 export type MessageReader = () => Promise<string | undefined>;
 
+export interface ReaderOptions {
+  coalesceMs?: number;
+  /**
+   * Offered every message the moment it is complete, whatever else is
+   * happening. Return true to consume it, and it is never queued.
+   *
+   * This is what lets a slash command run while the model is mid-turn. Those
+   * are the user talking to the program rather than to the model, so making
+   * them wait for a reply is backwards — `/pii off` matters most exactly when
+   * a turn is in flight and you have seen something you would rather it did
+   * not send next.
+   */
+  intercept?: (message: string) => boolean;
+}
+
 const DEFAULT_COALESCE_MS = 25;
 
 export function createMessageReader(
   source: LineSource,
-  coalesceMs: number = DEFAULT_COALESCE_MS,
+  options: ReaderOptions = {},
 ): MessageReader {
+  const coalesceMs = options.coalesceMs ?? DEFAULT_COALESCE_MS;
   /** Messages already complete and not yet taken. */
   const ready: string[] = [];
   /** Lines of the message still being assembled. */
@@ -63,6 +79,9 @@ export function createMessageReader(
     if (pending.length === 0) return;
     const message = pending.join("\n");
     pending = [];
+
+    // Handled here and now, or handed on to whoever is reading.
+    if (options.intercept?.(message)) return;
     deliver(message);
   };
 

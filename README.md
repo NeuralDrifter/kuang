@@ -196,6 +196,13 @@ Passphrase (nothing is shown as you type):
 `/pii save` and `/pii forget` turn it on and off mid-conversation; forgetting
 deletes the sealed file outright. `/pii` always says which state you are in.
 
+**Slash commands run the moment you type them, even while the model is
+mid-reply, and never reach the model.** They are you talking to the program,
+not to it — so `/pii off` takes effect immediately, which is exactly when it
+matters. Only two wait for the turn to end: leaving would throw away a reply
+you have already paid for, and asking for a passphrase would compete with the
+model for the screen. Both say so when you type them.
+
 Getting the passphrase wrong is not fatal — the conversation resumes without
 the vault, and the placeholders simply stay as text. A wrong passphrase and an
 altered file report the same thing on purpose: telling them apart would confirm

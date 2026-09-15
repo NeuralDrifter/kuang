@@ -197,6 +197,16 @@ const SECRETS_EMPTY: LocalizedText = {
   "zh-CN": "未保存：必须提供口令。",
 };
 
+const LEAVING_AFTER_TURN: LocalizedText = {
+  "en-US": "Leaving once this turn finishes.",
+  "zh-CN": "本轮结束后退出。",
+};
+
+const SECRETS_AFTER_TURN: LocalizedText = {
+  "en-US": "Will ask for a passphrase once this turn finishes.",
+  "zh-CN": "本轮结束后将询问口令。",
+};
+
 const NO_SESSION: LocalizedText = {
   "en-US": "No session to resume in this project. Starting a new one.",
   "zh-CN": "本项目没有可恢复的会话，将开始新会话。",
@@ -260,6 +270,7 @@ function deadPlaceholderNotice(session: Session, messages: AgentMessage[]): stri
 async function buildSession(
   ctx: CommandContext,
   cwd: string,
+  write: (s: string) => void,
   platform?: PlatformAccess,
   options: AgentOptions = {},
 ): Promise<Session> {
@@ -283,7 +294,7 @@ async function buildSession(
     // Always present so `/pii on` works mid-session, whatever it started as.
     vault: new Vault(options.redact ?? false),
     transport: dashscopeTransport(ctx.client),
-    sink: plainRenderer((s) => process.stdout.write(s), language),
+    sink: plainRenderer(write, language),
     model: ctx.settings.defaultTextModel ?? FALLBACK_MODEL,
     language,
   };
@@ -322,6 +333,57 @@ async function takeTurn(
 }
 
 /**
+ * What the user asked for mid-turn that could not be done on the spot.
+ *
+ * Almost nothing lands here. Showing state, listing sessions and toggling
+ * redaction all happen the instant they are typed. Only the two that need the
+ * terminal's attention wait: leaving would discard a turn already paid for,
+ * and asking for a passphrase would compete with the model for the screen and
+ * for the next line of input.
+ */
+interface Deferred {
+  exit: boolean;
+  secrets: "save" | "forget" | undefined;
+}
+
+/**
+ * Handle a line the moment it arrives, whatever the model is doing.
+ *
+ * Returns true when the line was the user talking to the program rather than
+ * to the model — in which case it never becomes a prompt.
+ */
+function interceptCommand(
+  message: string,
+  session: Session,
+  deferred: Deferred,
+  write: (s: string) => void,
+): boolean {
+  const outcome = handleSlash(message.trim(), {
+    language: session.language,
+    vault: session.vault,
+    projectRoot: session.projectRoot,
+    sessionId: session.id,
+    savingSecrets: session.secrets !== undefined,
+  });
+
+  switch (outcome.kind) {
+    case "prompt":
+      return false;
+    case "handled":
+      write(outcome.text + "\n");
+      return true;
+    case "exit":
+      deferred.exit = true;
+      write(localize(LEAVING_AFTER_TURN, session.language) + "\n");
+      return true;
+    case "secrets":
+      deferred.secrets = outcome.action;
+      write(localize(SECRETS_AFTER_TURN, session.language) + "\n");
+      return true;
+  }
+}
+
+/**
  * Read, dispatch, repeat, until the user leaves or input ends.
  *
  * Slash commands are resolved before anything reaches the model, so a mistyped
@@ -332,6 +394,7 @@ async function repl(
   readLine: ReadLine,
   write: (s: string) => void,
   askPassphrase: PassphraseAsker,
+  deferred: Deferred,
 ): Promise<void> {
   const ask = buildAsk(readLine);
   const messagesIn = session.opening;
@@ -349,31 +412,24 @@ async function repl(
 
   for (;;) {
     const raw = await readLine("> ");
-    if (raw === undefined) return; // End of input: leave cleanly, like /exit.
+    // End of input: leave cleanly, exactly like /exit.
+    if (raw === undefined) return;
 
+    // Anything reaching here is meant for the model. Slash commands were
+    // taken by the interceptor the moment they were typed, whether or not
+    // anything was waiting to read.
     const input = raw.trim();
     if (input === "") continue;
 
-    const slash = handleSlash(input, {
-      language: session.language,
-      vault: session.vault,
-      projectRoot: session.projectRoot,
-      sessionId: session.id,
-      savingSecrets: session.secrets !== undefined,
-    });
-    if (slash.kind === "exit") return;
-    if (slash.kind === "secrets") {
-      if (slash.action === "save") await startSavingSecrets(session, askPassphrase, write);
-      else stopSavingSecrets(session, write);
-      continue;
-    }
-    if (slash.kind === "handled") {
-      write(slash.text + "\n");
-      continue;
-    }
-
     messages = await takeTurn(messages, input, session, ask);
     persist(session, messages);
+
+    // The two that had to wait for the turn to end.
+    if (deferred.secrets === "save") await startSavingSecrets(session, askPassphrase, write);
+    else if (deferred.secrets === "forget") stopSavingSecrets(session, write);
+    deferred.secrets = undefined;
+
+    if (deferred.exit) return;
   }
 }
 
@@ -480,9 +536,34 @@ export async function runAgent(
   options: AgentOptions = {},
 ): Promise<void> {
   const cwd = process.cwd();
-  const session = await buildSession(ctx, cwd, platform, options);
   // readline echoes typed characters to its `output`, so a stream that can be
   // silenced is what keeps a passphrase off the screen.
+  /**
+   * Write to the terminal, remembering whether the cursor is at the start of
+   * a line.
+   *
+   * A command now runs the moment it is typed, which can be in the middle of
+   * the model streaming a word. Its output needs to begin on a fresh line
+   * rather than colliding with that, and only the writer knows where the
+   * cursor got to.
+   */
+  let atLineStart = true;
+  const writeOut = (text: string): void => {
+    if (text === "") return;
+    process.stdout.write(text);
+    atLineStart = text.endsWith("\n");
+  };
+
+  /** Write, breaking the line first if something is already on it. */
+  const writeOnFreshLine = (text: string): void => {
+    if (!atLineStart) writeOut("\n");
+    writeOut(text);
+  };
+
+  // Everything the user sees goes through writeOut, including the model's
+  // streamed reply, so `atLineStart` reflects the real cursor position.
+  const session = await buildSession(ctx, cwd, writeOut, platform, options);
+
   const output = new MutableOutput(process.stdout);
   const rl = createInterface({
     input: process.stdin,
@@ -499,20 +580,22 @@ export async function runAgent(
    * The prompt is written here rather than passed to readline, because one
    * prompt belongs to one message, not to each line of a paste.
    */
-  const nextMessage = createMessageReader(rl);
+  // Slash commands are dispatched here, as lines arrive, rather than by the
+  // loop when it next asks for input. The user is not queued behind the model.
+  const deferred: Deferred = { exit: false, secrets: undefined };
+  const nextMessage = createMessageReader(rl, {
+    intercept: (message) => interceptCommand(message, session, deferred, writeOnFreshLine),
+  });
   const readLine: ReadLine = async (prompt) => {
     process.stdout.write(prompt);
     return nextMessage();
   };
 
-  const write = (text: string): void => {
-    process.stdout.write(text);
-  };
-  const askPassphrase = passphraseAsker(output, () => nextMessage(), write);
+  const askPassphrase = passphraseAsker(output, () => nextMessage(), writeOut);
 
   try {
-    if (options.saveSecrets) await startSavingSecrets(session, askPassphrase, write);
-    await repl(session, readLine, write, askPassphrase);
+    if (options.saveSecrets) await startSavingSecrets(session, askPassphrase, writeOut);
+    await repl(session, readLine, writeOut, askPassphrase, deferred);
   } finally {
     rl.close();
   }
