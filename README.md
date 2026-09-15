@@ -115,8 +115,19 @@ cd packages/cli && npm link
 kuang agent
 ```
 
-> Requires Node.js >= 18.17. The binary is `kuang`, **not** `bl` — that name
+> Requires Node.js >= 22.12. The binary is `kuang`, **not** `bl` — that name
 > belongs to the upstream CLI and the two would collide on your PATH.
+
+Node 22 is on the Chinese mirrors, so getting it needs no detour:
+
+```bash
+# nvm
+export NVM_NODEJS_ORG_MIRROR=https://registry.npmmirror.com/-/binary/node/
+nvm install 22
+
+# fnm
+fnm install 22 --node-dist-mirror=https://registry.npmmirror.com/-/binary/node/
+```
 
 ## Authentication
 
