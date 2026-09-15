@@ -18,6 +18,7 @@
 import type { Language } from "bailian-cli-core";
 import { assistantMessage, toWireMessages, type AgentMessage, type ToolCall } from "./messages.ts";
 import { StreamRestorer } from "./redact/stream.ts";
+import { sanitizeDeep } from "./redact/apply.ts";
 import type { Vault } from "./redact/vault.ts";
 import type { EventSink, ToolPreview, Usage } from "./events.ts";
 import type { Tool, ToolRegistry } from "./tools/registry.ts";
@@ -66,16 +67,7 @@ function sanitizeWire(
   // same secrets on each one; counting values newly captured names each secret
   // once, when it first appears.
   const before = vault.stats().byRule;
-
-  const walk = (value: unknown): unknown => {
-    if (typeof value === "string") return vault.sanitize(value).text;
-    if (Array.isArray(value)) return value.map(walk);
-    if (value && typeof value === "object") {
-      return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, walk(v)]));
-    }
-    return value;
-  };
-  const messages = wire.map(walk);
+  const messages = sanitizeDeep(wire, vault);
 
   const after = vault.stats().byRule;
   const counts: Record<string, number> = {};

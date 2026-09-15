@@ -8,7 +8,6 @@ import opencode from "../src/commands/config/agent/writers/opencode.ts";
 import openclaw from "../src/commands/config/agent/writers/openclaw.ts";
 import codex from "../src/commands/config/agent/writers/codex.ts";
 import { resolveRegionBaseUrl } from "../src/commands/config/agent/writers/utils.ts";
-import yaml from "yaml";
 
 /**
  * Agent writer 单元测试：直接调用 writer，用临时 HOME 隔离文件系统。
