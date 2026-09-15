@@ -245,13 +245,19 @@ only the binary name changed.
 
 ## Security
 
-The agent runs commands a language model proposed, on your machine. One known
-limitation, deliberate and tracked:
+The agent runs commands a language model proposed, on your machine.
 
-**Approval patterns generalise by command prefix.** A rule derived from
-`rm -f build/tmp.txt` also permits `rm -f -r /`. Contained today only because
-approvals are in-memory per session and never persisted. A denylist of
-never-generalisable commands must land _with_ persistence, not after it.
+**"Always allow" stores a pattern, and the pattern has to name a verb.**
+`pnpm test` remembers `pnpm test*`; `rm -f build/tmp.txt` remembers nothing,
+because a pattern ending in an option says which program runs and nothing about
+what it does — which is how `rm -f*` used to equal the pattern for `rm -f -r /`.
+Destructive and privilege-changing programs (`rm`, `dd`, `mv`, `chmod`,
+`shutdown`, `sudo`, …) never produce a rule at all, so they ask every time.
+Anything that could chain into a second command is refused outright.
+
+A rule that names a verb still covers the tail after it: approving
+`npm run build` permits `npm run <any script>`. That is the feature working —
+but know that it is what you are agreeing to.
 
 Path containment resolves symlinks: `../`, absolute paths, and links or
 junctions pointing out of the project are all refused, on the project root as

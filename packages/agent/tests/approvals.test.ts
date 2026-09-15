@@ -43,11 +43,16 @@ test("a chaining command cannot even be stored as a rule", () => {
   expect(store.isAllowed("shell", { command: "pnpm test" })).toBe(false);
 });
 
-test("a command whose second word is an option keeps that option in the rule", () => {
+test("a command whose second word is an option is never remembered", () => {
   const store = new ApprovalStore([]);
   store.allowAlways("shell", { command: "rm -f build/tmp.txt" });
 
-  expect(store.isAllowed("shell", { command: "rm -f build/other.txt" })).toBe(true);
+  // This test previously asserted the opposite of its first line: approving
+  // `rm -f build/tmp.txt` also permitted `rm -f build/other.txt`, because both
+  // derive `rm -f*`. Keeping the option in the rule narrowed the hole without
+  // closing it — the tail was still free. Now nothing is stored at all.
+  expect(store.isAllowed("shell", { command: "rm -f build/other.txt" })).toBe(false);
+  expect(store.isAllowed("shell", { command: "rm -f build/tmp.txt" })).toBe(false);
   expect(store.isAllowed("shell", { command: "rm -rf /" })).toBe(false);
   expect(store.isAllowed("shell", { command: "rm -rf ~/.ssh" })).toBe(false);
 });
@@ -135,4 +140,68 @@ test("rules round-trip for persistence", () => {
   const store = new ApprovalStore([{ tool: "shell", argPattern: "git status*" }]);
   expect(store.isAllowed("shell", { command: "git status --short" })).toBe(true);
   expect(store.rules()).toEqual([{ tool: "shell", argPattern: "git status*" }]);
+});
+
+// ── what a rule must never generalise to ────────────────────────────────────
+//
+// `isAllowed` compares derived patterns for equality, so two calls that derive
+// the same pattern are the same permission. These tests are written that way:
+// approve one, then ask whether the other is now allowed.
+
+/** Whether approving `approved` would also authorise `probe`. */
+function alsoAllows(approved: string, probe: string): boolean {
+  const store = new ApprovalStore();
+  store.allowAlways("shell", { command: approved });
+  return store.isAllowed("shell", { command: probe });
+}
+
+test("approving an option-first command authorises nothing", () => {
+  // `rm -f x` derived `rm -f*`, and so did `rm -f -r /`. Equal patterns, so
+  // one answer authorised the other. This is the escalation being closed.
+  expect(alsoAllows("rm -f build/tmp.txt", "rm -f -r /")).toBe(false);
+  expect(alsoAllows("git --no-pager diff", "git --no-pager reset --hard")).toBe(false);
+});
+
+test("a pattern whose second word is an option is never derived at all", () => {
+  // Not merely unmatched — never stored, so it cannot match itself either.
+  expect(alsoAllows("rm -f build/tmp.txt", "rm -f build/tmp.txt")).toBe(false);
+  expect(patternFor("shell", { command: "docker -v" })).toBeUndefined();
+});
+
+test("patterns that name a verb still work", () => {
+  // The useful ones must survive, or every command prompts forever and the
+  // feature is worthless.
+  expect(alsoAllows("pnpm test build", "pnpm test --watch")).toBe(true);
+  expect(alsoAllows("git status", "git status --short")).toBe(true);
+  expect(alsoAllows("cargo build", "cargo build --release")).toBe(true);
+});
+
+test("a verb still scopes the rule to that verb", () => {
+  expect(alsoAllows("git status", "git push --force")).toBe(false);
+  expect(alsoAllows("pnpm test", "pnpm publish")).toBe(false);
+});
+
+test("denylisted programs never generalise, even with a verb", () => {
+  // `rm backup` would otherwise authorise `rm backup --recursive`.
+  for (const command of ["rm backup", "dd if=/dev/zero", "mv a b", "chmod 777", "sudo anything"]) {
+    expect(patternFor("shell", { command }), command).toBeUndefined();
+  }
+});
+
+test("the denylist is not fooled by a path, a case change or an extension", () => {
+  const windowsPath = "C:\\Windows\\System32\\takeown.exe /f x";
+  for (const command of ["/bin/rm backup", "RM.EXE backup", windowsPath]) {
+    expect(patternFor("shell", { command }), command).toBeUndefined();
+  }
+});
+
+test("mkfs variants are all covered", () => {
+  expect(patternFor("shell", { command: "mkfs /dev/sda" })).toBeUndefined();
+  expect(patternFor("shell", { command: "mkfs.ext4 /dev/sda" })).toBeUndefined();
+});
+
+test("a program whose name merely starts with a denied one is unaffected", () => {
+  // `rmdir` is denied on its own merits; `rmate` and `moveit` are not `mv`.
+  expect(patternFor("shell", { command: "rmate file.txt" })).toBe("rmate file.txt*");
+  expect(patternFor("shell", { command: "movein place" })).toBe("movein place*");
 });

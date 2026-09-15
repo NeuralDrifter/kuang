@@ -15,38 +15,29 @@ missed.
 
 ## 1. Security — must be fixed before any release
 
-### 1.1 Approval rules generalise by command prefix
+### 1.1 Approval rules still generalise over the argument tail
 
 **Where:** `packages/agent/src/core/approvals.ts`, `patternFor`
 
-Answering `always` derives a reusable rule from the first two words of the
-command. That rule then authorises **any argument tail**:
+The escalation that used to live here is closed: a two-word pattern whose
+second word is an option now derives nothing (`rm -f x` no longer becomes
+`rm -f*`, which equalled the pattern from `rm -f -r /`), and a denylist refuses
+`rm`, `dd`, `mv`, `chmod`, `sudo` and friends however the rule is phrased.
 
-| Approved once                             | Also permits                        |
-| ----------------------------------------- | ----------------------------------- |
-| `rm -f build/tmp.txt` → `rm -f*`          | `rm -f -r /`, `rm -f ~/.ssh/id_rsa` |
-| `git --no-pager diff` → `git --no-pager*` | `git --no-pager reset --hard`       |
+What remains is narrower and deliberate. A rule that names a verb still covers
+any tail after it: approving `npm run build` permits `npm run <any script>`.
+Commands that could chain are refused at derivation _and_ at matching, so
+`pnpm test; rm -rf ~` is never covered by `pnpm test*`.
 
-This is inherent to any prefix rule and is not a regression — an earlier
-iteration collapsed to the bare binary (`rm*`), which was far worse. It is
-contained **today** only because approvals live in memory for one session and
-are never written to disk, and because reaching it requires the user to have
-typed `always` on a command sharing the same two words.
+That residue is the point of the feature — a rule useless for anything but the
+exact command already approved would not be worth storing. It is recorded here
+so it is not mistaken for an oversight.
 
-**Fix:** a denylist of commands that may never be generalised into a rule at
-all — `rm`, `dd`, `mkfs`, `shutdown`, `chmod -R`, and similar. Those must
-always prompt, every time.
-
-> **Gate:** this denylist **must land in the same change as approvals
-> persistence, never after it.** The moment rules survive a restart, the
-> containment above disappears.
-
-Planned as Task 2 of
-[design/stage-4-persistence.md](design/stage-4-persistence.md), which also
-found a sharper fix than a denylist alone: a two-word pattern whose second word
-is an option (`rm -f*`, `git --no-pager*`) has captured no verb, so it should
-derive nothing at all. That drops exactly the dangerous shape while keeping
-`pnpm test*` and `git status*` useful.
+**Still outstanding:** rules are not yet scoped to a project, so once they are
+persisted a rule approved in one repository would apply in another. That lands
+with persistence in
+[design/stage-4-persistence.md](design/stage-4-persistence.md) Task 3, and must
+not ship after it.
 
 ## 2. Correctness
 
@@ -258,6 +249,7 @@ Kept rather than deleted, so the record shows what went wrong and when.
 
 | Found      | Issue                                                                                                                                                                                                                                                | Fixed in  |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 2026-09-15 | A two-word approval pattern ending in an option captured no verb, so `rm -f build/tmp.txt` approved once also authorised `rm -f -r /`; an existing test asserted this behaviour rather than catching it                                              | `pending` |
 | 2026-09-14 | Input arriving faster than one line per prompt was discarded, so pasting a stack trace sent only its first line and piping a script ran only its first command                                                                                       | `pending` |
 | 2026-09-14 | A symlink or junction inside the project was followed out of it, and `read_file` is tier `auto` — cloning a hostile repository was enough to read `~/.ssh/id_rsa` with no prompt                                                                     | `pending` |
 | 2026-09-14 | The formatter and `generate-reference.ts` both claimed `skills/*/reference`, so each commit left 34 files dirty — and the formatter escaped markdown inside flag docs, teaching the model config keys that do not exist (`base*url` for `base_url`)  | `pending` |
