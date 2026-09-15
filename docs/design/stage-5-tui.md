@@ -31,6 +31,19 @@ top-level await, so any consumer or bundle that emits CJS fails at transform
 time rather than at runtime. `packages/agent` is already `"type": "module"`;
 the thing to watch is the published build.
 
+**The JSX transform depends on the working directory, so the files must not.**
+Which transform runs is chosen by whichever tsconfig the runner finds. Tests
+run from `packages/agent`, whose config sets `jsx: react-jsx`, and got the
+automatic runtime. `npx tsx src/main.ts agent` runs from `packages/cli`, whose
+config says nothing about jsx, so esbuild fell back to the classic transform
+and emitted `React.createElement` into files that never imported React — the
+product failed on startup with "React is not defined" while every test passed.
+
+A `@jsxRuntime automatic` pragma does **not** fix it: esbuild ignored it, which
+a transform check proved rather than assumed. Importing React explicitly does,
+because the file is then correct under both transforms instead of under
+whichever was guessed.
+
 **Ink renders to any writable stream.** A test has no terminal, but
 `render(element, { stdout })` will draw into a captured stream, so what reaches
 the screen can be asserted on rather than assumed. This is why the drawing

@@ -8,6 +8,14 @@
  * free of state and input: Ink will render to any writable stream, so what
  * reaches the screen can be asserted on rather than assumed.
  */
+// `React` is imported for its own sake, not only for the types below.
+// Which JSX transform runs depends on whichever tsconfig the runner finds,
+// and that depends on the working directory: tests run from this package and
+// get the automatic runtime, while `npx tsx src/main.ts agent` runs from
+// packages/cli, finds a config with no jsx setting, and falls back to the
+// classic transform — which emits `React.createElement`. Importing React
+// makes the file correct under both, rather than under whichever was guessed.
+import React from "react";
 import { expect, test } from "vite-plus/test";
 import { render } from "ink";
 import { Writable } from "node:stream";

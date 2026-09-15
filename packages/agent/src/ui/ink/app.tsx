@@ -12,6 +12,14 @@
  * sessions and redaction all speak `AgentEvent` and plain strings, which is
  * what makes a second renderer possible at all rather than a rewrite.
  */
+// `React` is imported for its own sake, not only for the types below.
+// Which JSX transform runs depends on whichever tsconfig the runner finds,
+// and that depends on the working directory: tests run from this package and
+// get the automatic runtime, while `npx tsx src/main.ts agent` runs from
+// packages/cli, finds a config with no jsx setting, and falls back to the
+// classic transform — which emits `React.createElement`. Importing React
+// makes the file correct under both, rather than under whichever was guessed.
+import React from "react";
 import type { CommandContext } from "bailian-cli-core";
 import { Box, render, Static, Text, useApp, useInput } from "ink";
 import { useCallback, useEffect, useRef, useState } from "react";

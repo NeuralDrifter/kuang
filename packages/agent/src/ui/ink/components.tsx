@@ -9,6 +9,14 @@
  * string and asserted on without a terminal — which is the only way the UI
  * gets tested at all, since a TTY is exactly what a test does not have.
  */
+// `React` is imported for its own sake, not only for the types below.
+// Which JSX transform runs depends on whichever tsconfig the runner finds,
+// and that depends on the working directory: tests run from this package and
+// get the automatic runtime, while `npx tsx src/main.ts agent` runs from
+// packages/cli, finds a config with no jsx setting, and falls back to the
+// classic transform — which emits `React.createElement`. Importing React
+// makes the file correct under both, rather than under whichever was guessed.
+import React from "react";
 import { Box, Text } from "ink";
 import type { ApprovalDecision } from "../../core/approvals.ts";
 import type { Entry, TranscriptState } from "./transcript.ts";
