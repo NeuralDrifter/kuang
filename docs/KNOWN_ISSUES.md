@@ -29,23 +29,6 @@ recorded under §6 rather than here.
 
 ## 2. Correctness
 
-### 2.0 The Ink UI denies every approval without asking
-
-**Where:** `packages/agent/src/index.ts`, `buildInkSession`
-
-The Ink path wires `buildAsk(async () => undefined)`. That resolves to
-`undefined`, which falls through to `return "deny"`, so every ask-tier tool is
-refused — `write_file`, `edit_file`, `shell`, and anything that spends media
-credits — and the user is told "Denied by the user" about something they were
-never asked.
-
-Reached only in a real terminal, since the Ink path is gated on both stdout and
-stdin being TTYs. Piped and scripted runs take the plain path, which prompts
-properly.
-
-**Fix:** Task 4 of [design/stage-5-tui.md](design/stage-5-tui.md) — the
-approval prompt as a component. Until then the plain path is the complete one.
-
 ### 2.1 `~` is not treated as shell chaining
 
 **Where:** `approvals.ts`, `SHELL_CHAINING`
@@ -262,6 +245,7 @@ Kept rather than deleted, so the record shows what went wrong and when.
 
 | Found      | Issue                                                                                                                                                                                                                                                | Fixed in  |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 2026-09-15 | The Ink path wired an asker that resolved to undefined, so every ask-tier tool was refused while telling the user they had denied it                                                                                                                 | `pending` |
 | 2026-09-15 | A two-word approval pattern ending in an option captured no verb, so `rm -f build/tmp.txt` approved once also authorised `rm -f -r /`; an existing test asserted this behaviour rather than catching it                                              | `pending` |
 | 2026-09-14 | Input arriving faster than one line per prompt was discarded, so pasting a stack trace sent only its first line and piping a script ran only its first command                                                                                       | `pending` |
 | 2026-09-14 | A symlink or junction inside the project was followed out of it, and `read_file` is tier `auto` — cloning a hostile repository was enough to read `~/.ssh/id_rsa` with no prompt                                                                     | `pending` |

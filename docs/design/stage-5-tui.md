@@ -12,55 +12,12 @@ Status: **in progress.** Stage 4 (persistence) is complete; see
 | 5 — passphrase and status          | status line drafted; passphrase not started   |
 | 6 — README, screenshots, issue log | not started                                   |
 
-> **The Ink path is not usable yet.** `buildInkSession` passes
-> `buildAsk(async () => undefined)`, which falls through to `"deny"`, so every
-> ask-tier tool — `write_file`, `edit_file`, `shell`, anything spending credits
-> — is silently refused while reporting "Denied by the user". A user would
-> think they had refused something they were never asked about. Task 4 is what
-> closes this, and until it does the plain path is the complete one.
-
-## What this is, and what it is not
-
-The renderer today is plain text with no ANSI at all. It exists to prove the
-`AgentEvent` stream carries enough to drive a UI, and it does. This stage
-builds the real one.
-
-**`core/` does not change.** The turn loop, events, slash commands, sessions,
-approvals and redaction are all terminal-agnostic, which was the point of
-keeping `core/` unable to import `ui/`. If this stage ends up editing files
-under `core/`, something has gone wrong and is worth stopping to look at.
-
-**The plain renderer stays.** Ink requires a TTY. Piping, CI, and every
-scripted test used during development are not TTYs, and a tool that only works
-when a human is watching is worse than one that also works in a pipe.
-`process.stdout.isTTY` picks between them.
-
-## The decision already taken
-
-ink 7 with React 19, and the whole project raised to Node ≥ 22.12 — the floor
-CI already tested against and the only one anybody here actually ran. Node 22
-is on the Chinese mirrors, so this costs that half of the audience nothing.
-
-## The hard part: input
-
-Ink takes stdin in **raw mode**. That replaces readline outright, and with it
-everything built on readline today:
-
-| Built on readline                | Must survive as behaviour                               |
-| -------------------------------- | ------------------------------------------------------- |
-| `createMessageReader` coalescing | Lines arriving together are one message, so paste works |
-| `intercept`                      | A slash command runs the instant it is typed, mid-turn  |
-| `MutableOutput` echo suppression | A passphrase never reaches the screen or scrollback     |
-| `buildAsk`                       | Approval answers read from the same stream              |
-
-`tests/input.test.ts` is the specification for the first two. Those tests are
-not deleted when readline goes; they are pointed at whatever replaces it.
-
-Raw mode changes the shape of the problem rather than the rule. Paste arrives
-as a burst of keypresses instead of lines, so "arrived together" is measured on
-input chunks rather than `line` events — the 25 ms window is the same idea.
-Bracketed paste, where the terminal brackets a paste in escape sequences,
-is a better signal where it is available and worth using when it is.
+> **Approvals now work in the Ink path.** The loop asks by awaiting a promise
+> and a component cannot be awaited, so `pending.ts` sits between them: the
+> loop's request becomes a value the UI draws, and a keystroke resolves what
+> the loop is parked on. With no UI listening the answer is `deny`, which is
+> the safe direction — refusing something nobody could be asked about is
+> recoverable, running it is not.
 
 ## What building it changed about this plan
 
@@ -73,6 +30,12 @@ bracketed-paste detection. Task 2 is therefore much smaller than written.
 top-level await, so any consumer or bundle that emits CJS fails at transform
 time rather than at runtime. `packages/agent` is already `"type": "module"`;
 the thing to watch is the published build.
+
+**Ink renders to any writable stream.** A test has no terminal, but
+`render(element, { stdout })` will draw into a captured stream, so what reaches
+the screen can be asserted on rather than assumed. This is why the drawing
+parts are kept free of state and input — `components.tsx` takes props and
+returns elements, while `app.tsx` owns state, keys and the wiring.
 
 **The UI is handed callbacks, not the session.** `buildInkSession` returns
 `onSubmit` and `onCommand`, so the renderer cannot reach past them into the

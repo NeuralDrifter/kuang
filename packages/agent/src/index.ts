@@ -33,6 +33,7 @@ import {
 import { forgetVault, hasVault, loadVault, saveVault } from "./core/redact/vault-file.ts";
 import { MutableOutput, passphraseAsker, type PassphraseAsker } from "./core/secret-prompt.ts";
 import { handleSlash } from "./core/slash.ts";
+import { ask, type Question } from "./ui/ink/pending.ts";
 import { bailianTools } from "./core/tools/bailian.ts";
 import { fsTools } from "./core/tools/fs.ts";
 import { mediaTools } from "./core/tools/media.ts";
@@ -617,6 +618,11 @@ export interface InkWiring {
   onSubmit: (input: string, emit: (event: AgentEvent) => void) => Promise<void>;
   /** Handle a slash command, or return undefined when it is a prompt. */
   onCommand: (input: string) => { text?: string; exit?: boolean } | undefined;
+  /**
+   * Register what to do when the loop needs consent. The handler is given the
+   * question to draw; answering it resolves what the loop is parked on.
+   */
+  setApprovalHandler: (handler: (question: Question<ApprovalDecision>) => void) => void;
 }
 
 /**
@@ -641,9 +647,25 @@ export async function buildInkSession(
   let messages = session.opening;
   const deferred: Deferred = { exit: false, secrets: undefined };
 
+  /** Set by the UI, so consent can be asked for rather than assumed. */
+  let raise: ((question: Question<ApprovalDecision>) => void) | undefined;
+
+  /**
+   * Ask the user, through the UI, and wait.
+   *
+   * With no UI listening the answer is `deny`, which is the safe direction:
+   * refusing something nobody could be asked about is recoverable, running it
+   * is not.
+   */
+  const askThroughUi: ApprovalAsker = async (call, preview) => {
+    if (!raise) return "deny";
+    const asked = ask<ApprovalDecision>(preview.summary || call.name, preview.diff);
+    raise(asked.question);
+    return asked.answered;
+  };
+
   const onSubmit = async (input: string, emit: (event: AgentEvent) => void): Promise<void> => {
-    const ask = buildAsk(async () => undefined); // approvals land in Task 4
-    messages = await takeTurn(messages, input, { ...session, sink: emit }, ask);
+    messages = await takeTurn(messages, input, { ...session, sink: emit }, askThroughUi);
     persist({ ...session, sink: emit }, messages);
   };
 
@@ -673,6 +695,9 @@ export async function buildInkSession(
     session: { id: session.id, model: session.model, redacting: session.vault.enabled },
     onSubmit,
     onCommand,
+    setApprovalHandler: (handler) => {
+      raise = handler;
+    },
   };
 }
 
