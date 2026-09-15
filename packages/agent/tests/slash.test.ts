@@ -12,8 +12,6 @@ import { Vault } from "../src/core/redact/vault.ts";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { recordFor, saveSession } from "../src/core/session.ts";
-import { sessionsDir } from "../src/core/paths.ts";
 import { handleSlash, type SlashContext } from "../src/core/slash.ts";
 
 const CARD = "4111 1111 1111 1111";
