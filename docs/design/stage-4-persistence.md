@@ -55,8 +55,37 @@ restores to the user's card number, because the vault that knew the mapping is
 gone. That is a display detail about old turns, and it is the correct trade
 against writing credentials into `~/.bailian`.
 
-`--save-secrets` may later persist the vault as a sidecar for people who want
-full fidelity, written `0600`, opt-in, never the default. Not in this stage.
+### Carrying the vault across a resume
+
+Storing the sanitized transcript settles what reaches disk, but it leaves a
+second problem: the vault is in memory, so every placeholder issued before a
+restart is dead on resume. The user sees `[REDACTED_CARD_1]` where their card
+used to be — and worse, if the model writes that placeholder into a file, the
+literal text lands there. Silent corruption, not a display nit.
+
+The corruption half is not specific to resume and is **already fixed**: a
+placeholder the vault cannot resolve now refuses the tool call rather than
+running it, because a model can invent one at any time. See `Vault.unresolved`.
+
+For the rest, `--save-secrets` persists the vault beside the session,
+**encrypted with a passphrase**:
+
+- scrypt to derive the key, AES-256-GCM to seal it, both from `node:crypto`
+- the passphrase is asked for on save and on resume, and is never stored
+- opt-in; the default remains that nothing is written and placeholders expire
+
+The alternatives were considered and rejected. A key in a file next to the
+ciphertext is decoration — anything that can read one reads the other. The OS
+keychain (DPAPI, Keychain, libsecret) would make resume unattended, which is
+genuinely nicer, but it needs a native module, and a native module is the most
+common way a globally installed CLI fails to install at all. Plaintext at
+`0600` is defensible against the threat most users describe, but it creates one
+file holding every credential the agent has ever seen, and `0600` stops nothing
+that runs as the user — which on a desktop is everything.
+
+What encryption actually buys, given the file would be `0600` regardless: the
+accidents. `~/.bailian` inside a synced folder, a backup, a shared VM image, a
+machine that is not disk-encrypted.
 
 ### Approval rules: two fixes, not one
 
@@ -142,6 +171,17 @@ timestamps, and the **sanitized** transcript. Save and load, list by project.
 
 Test: a session containing a redacted value round-trips without the real value
 appearing anywhere in the file — assert on the file bytes, not on the object.
+
+### Task 4b — `--save-secrets`
+
+The encrypted vault sidecar: scrypt + AES-256-GCM over `node:crypto`,
+passphrase prompted on save and on resume, never stored. A wrong passphrase
+fails the resume cleanly and leaves the session usable without its vault,
+rather than aborting.
+
+Test: the ciphertext contains no plaintext secret; a tampered file fails the
+GCM tag rather than decrypting to garbage; a wrong passphrase reports itself
+and the session still loads.
 
 ### Task 5 — wire into the REPL
 

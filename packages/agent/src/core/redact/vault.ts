@@ -89,6 +89,23 @@ export class Vault {
     return text.replace(PLACEHOLDER, (token) => this.toValue.get(token) ?? token);
   }
 
+  /**
+   * Placeholders in `text` that this vault cannot resolve.
+   *
+   * `restore` leaves an unknown placeholder as written, which is right for
+   * display — blanking it would delete text the user is about to read. It is
+   * wrong for a tool argument: writing the literal `[REDACTED_CARD_99]` into a
+   * config file is silent corruption. Callers about to act on restored text
+   * ask here first.
+   *
+   * A model can invent one; and once sessions resume, a placeholder issued
+   * before a restart will outlive the vault that knew its value.
+   */
+  unresolved(text: string): string[] {
+    const found = text.match(PLACEHOLDER) ?? [];
+    return [...new Set(found.filter((token) => !this.toValue.has(token)))];
+  }
+
   /** Distinct values held, overall and by rule. */
   stats(): { total: number; byRule: Record<string, number> } {
     const byRule: Record<string, number> = {};

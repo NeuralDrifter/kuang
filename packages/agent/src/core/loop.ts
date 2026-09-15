@@ -203,6 +203,26 @@ async function resolveCall(call: ToolCall, options: LoopOptions): Promise<AgentM
     // Restore before parsing: a placeholder reaching a tool unrestored would
     // write `[REDACTED_CARD_1]` into a real file.
     const raw = options.vault ? options.vault.restore(call.arguments) : call.arguments;
+
+    // A placeholder that survived restoration is one this vault never issued —
+    // invented by the model, or inherited from a session whose vault is gone.
+    // Running the tool would write the placeholder text itself into a real
+    // file. Refuse, and say so in terms the model can act on.
+    const unresolved = options.vault?.unresolved(raw) ?? [];
+    if (unresolved.length > 0) {
+      const list = unresolved.join(", ");
+      const summary =
+        options.language === "zh-CN"
+          ? `无法还原的占位符: ${list}`
+          : `Unresolvable placeholder: ${list}`;
+      return refuse(
+        summary,
+        `These placeholders were never issued in this session and cannot be ` +
+          `resolved to a value: ${list}. Do not invent placeholders. If you need ` +
+          `a value you cannot see, ask the user for it instead of guessing.`,
+      );
+    }
+
     args = JSON.parse(raw) as Record<string, unknown>;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

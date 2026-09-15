@@ -306,3 +306,126 @@ test("the tool call shown to the user has its arguments restored", async () => {
   const shown = events.find((e) => e.type === "tool_call");
   expect(shown && "call" in shown ? shown.call.arguments : "").toContain(CARD);
 });
+
+// ── placeholders the vault cannot resolve ───────────────────────────────────
+
+test("a tool is refused when an argument holds a placeholder that was never issued", async () => {
+  const vault = new Vault();
+  vault.sanitize(CARD); // issues _1, so _99 below is plainly invented
+
+  const seen: string[] = [];
+  const out = await runTurn(
+    [{ role: "user", content: "go" }],
+    opts({
+      tools: registryWith(echoTool(seen)),
+      vault,
+      transport: scripted([
+        [
+          {
+            toolCall: {
+              index: 0,
+              id: "c1",
+              name: "read_file",
+              argumentsDelta: JSON.stringify({ path: "[REDACTED_CARD_99]" }),
+            },
+          },
+        ],
+        [{ text: "understood" }],
+      ]),
+    }),
+  );
+
+  // Running it would write the placeholder text itself into a real file.
+  expect(seen).toEqual([]);
+  const toolReply = out.find((m) => m.role === "tool");
+  expect(JSON.stringify(toolReply)).toContain("REDACTED_CARD_99");
+  expect(JSON.stringify(toolReply)).toContain("never issued");
+});
+
+test("the refusal names the placeholder so the model can correct itself", async () => {
+  const vault = new Vault();
+  const { sink, events } = collect();
+
+  await runTurn(
+    [{ role: "user", content: "go" }],
+    opts({
+      vault,
+      sink,
+      transport: scripted([
+        [
+          {
+            toolCall: {
+              index: 0,
+              id: "c1",
+              name: "read_file",
+              argumentsDelta: JSON.stringify({ path: "[REDACTED_EMAIL_3]" }),
+            },
+          },
+        ],
+        [{ text: "ok" }],
+      ]),
+    }),
+  );
+
+  const failure = events.find((e) => e.type === "tool_result" && !e.ok);
+  expect(failure && "summary" in failure ? failure.summary : "").toContain("REDACTED_EMAIL_3");
+});
+
+test("a legitimate placeholder still resolves and runs", async () => {
+  const vault = new Vault();
+  const id = vault.sanitize(CARD).text;
+
+  const seen: string[] = [];
+  await runTurn(
+    [{ role: "user", content: "go" }],
+    opts({
+      tools: registryWith(echoTool(seen)),
+      vault,
+      transport: scripted([
+        [
+          {
+            toolCall: {
+              index: 0,
+              id: "c1",
+              name: "read_file",
+              argumentsDelta: JSON.stringify({ path: id }),
+            },
+          },
+        ],
+        [{ text: "done" }],
+      ]),
+    }),
+  );
+
+  // The guard must not break the feature it protects.
+  expect(seen).toEqual([CARD]);
+});
+
+test("text that merely resembles a placeholder is not treated as one", async () => {
+  const vault = new Vault();
+  const seen: string[] = [];
+
+  await runTurn(
+    [{ role: "user", content: "go" }],
+    opts({
+      tools: registryWith(echoTool(seen)),
+      vault,
+      transport: scripted([
+        [
+          {
+            toolCall: {
+              index: 0,
+              id: "c1",
+              name: "read_file",
+              argumentsDelta: JSON.stringify({ path: "docs/[REDACTED].md" }),
+            },
+          },
+        ],
+        [{ text: "done" }],
+      ]),
+    }),
+  );
+
+  // Only the issued syntax counts; a real filename must not be blocked.
+  expect(seen).toEqual(["docs/[REDACTED].md"]);
+});
