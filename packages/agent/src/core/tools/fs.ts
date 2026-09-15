@@ -102,11 +102,10 @@ const REGEX_SPECIAL = /[.*+?^${}()|[\]\\]/;
 
 // Translate a glob pattern into an anchored RegExp, in one pass so a doubled
 // star is consumed before a single star can match its first character.
-// `matchesPattern` in ../approvals.ts is deliberately not reused here: it
-// requires a doubled star to cross at least one directory boundary, which is
-// right for approval rules but wrong for the patterns a model actually
-// writes — a leading doubled-star glob segment, or one nested under a
-// directory, would silently under-match.
+// A doubled star here matches zero or more directories, unlike the stricter
+// reading that requires it to cross at least one boundary: a model writing a
+// leading doubled-star glob, or one nested under a directory, means "anywhere
+// below", and the strict reading would silently under-match.
 //  - a doubled star immediately followed by a slash also matches zero
 //    directories (so the slash after it is optional)
 //  - a doubled star alone matches anything, including slashes

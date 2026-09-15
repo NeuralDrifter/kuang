@@ -58,14 +58,4 @@ export class ToolRegistry {
       },
     }));
   }
-
-  /**
-   * Run a tool. Throws for unknown names rather than returning an error string,
-   * so a typo cannot be mistaken for a tool's own output.
-   */
-  async dispatch(name: string, args: Record<string, unknown>): Promise<string> {
-    const tool = this.tools.get(name);
-    if (!tool) throw new Error(`Unknown tool: ${name}`);
-    return tool.run(args);
-  }
 }

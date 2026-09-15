@@ -2,14 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { expect, test } from "vite-plus/test";
-import { ApprovalStore, matchesPattern, patternFor } from "../src/core/approvals.ts";
-
-test("glob patterns are anchored at both ends", () => {
-  expect(matchesPattern("pnpm test*", "pnpm test --run")).toBe(true);
-  expect(matchesPattern("pnpm test*", "rm -rf / && pnpm test")).toBe(false);
-  expect(matchesPattern("src/**", "src/a/b.ts")).toBe(true);
-  expect(matchesPattern("src/**", "other/a.ts")).toBe(false);
-});
+import { ApprovalStore, patternFor } from "../src/core/approvals.ts";
 
 test("an empty store allows nothing", () => {
   expect(new ApprovalStore([]).isAllowed("shell", { command: "ls" })).toBe(false);
@@ -57,7 +50,7 @@ test("a command whose second word is an option is never remembered", () => {
   expect(store.isAllowed("shell", { command: "rm -rf ~/.ssh" })).toBe(false);
 });
 
-test("an option in second position does not authorise every flag of a binary", () => {
+test("a rule is scoped to the exact second word it was derived from", () => {
   const store = new ApprovalStore([]);
   store.allowAlways("shell", { command: "git --no-pager diff" });
 
@@ -204,4 +197,12 @@ test("a program whose name merely starts with a denied one is unaffected", () =>
   // `rmdir` is denied on its own merits; `rmate` and `moveit` are not `mv`.
   expect(patternFor("shell", { command: "rmate file.txt" })).toBe("rmate file.txt*");
   expect(patternFor("shell", { command: "movein place" })).toBe("movein place*");
+});
+
+test("a single-word command does not authorise a longer program name", () => {
+  // `ls` deriving `ls*` must not read as a prefix over program names, or
+  // approving `ls` would quietly approve `lsof -i` as well.
+  expect(alsoAllows("ls", "lsof -i")).toBe(false);
+  expect(alsoAllows("ls", "ls -la")).toBe(false);
+  expect(alsoAllows("ls", "ls")).toBe(true);
 });

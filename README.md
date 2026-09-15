@@ -37,8 +37,9 @@ Everything the upstream CLI does still works. Kuang adds a host for it.
 ## Status
 
 Early, but usable. The agent runs against the live API and can reach the whole
-platform command surface. Media generation is wired and its requests are
-verified; only the live media responses are untested, for want of credits.
+platform command surface. Conversations and approvals survive a restart, and
+secrets can be kept from the model. Media generation is wired and its requests
+are verified; only the live media responses are untested, for want of credits.
 
 **Working today**
 
@@ -67,7 +68,9 @@ verified; only the live media responses are untested, for want of credits.
   "always allow" answers that outlive the terminal, scoped per project
 - Optional passphrase-sealed vault (`--save-secrets`) — off by default, because
   the vault living only in memory is the promise the rest of the design rests on
-- 232 tests — 227 headless unit tests plus 5 that drive the real CLI
+- 344 tests — 339 headless unit tests plus 5 that drive the real CLI, with 5
+  skipped where Windows refuses unprivileged symlinks (the same containment is
+  covered there by directory junctions instead)
 
 **Wired but not verified against the live API**
 
@@ -300,7 +303,10 @@ only the binary name changed.
 
 ## Security
 
-The agent runs commands a language model proposed, on your machine.
+The agent runs commands a language model proposed, on your machine. Paths
+cannot leave the project, including through a symlink or junction; commands
+that could chain into a second command are never remembered; and answering
+"always" is bounded by the rules below.
 
 **"Always allow" stores a pattern, and the pattern has to name a verb.**
 `pnpm test` remembers `pnpm test*`; `rm -f build/tmp.txt` remembers nothing,

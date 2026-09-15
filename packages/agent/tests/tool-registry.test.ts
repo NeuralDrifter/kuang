@@ -14,10 +14,11 @@ function echoTool(name = "echo"): Tool {
   };
 }
 
-test("registers and dispatches a tool", async () => {
+test("registers a tool and hands it back", async () => {
   const r = new ToolRegistry();
   r.register(echoTool());
-  expect(await r.dispatch("echo", { text: "hi" })).toBe("hi");
+  // The loop takes the tool and runs it itself, so `get` is the whole contract.
+  expect(await r.get("echo")!.run({ text: "hi" })).toBe("hi");
 });
 
 test("rejects duplicate tool names", () => {
@@ -26,9 +27,9 @@ test("rejects duplicate tool names", () => {
   expect(() => r.register(echoTool())).toThrow(/already registered/);
 });
 
-test("dispatching an unknown tool throws rather than returning a string", async () => {
+test("an unknown tool is undefined, for the caller to refuse", async () => {
   const r = new ToolRegistry();
-  await expect(r.dispatch("nope", {})).rejects.toThrow(/Unknown tool/);
+  expect(r.get("nope")).toBeUndefined();
 });
 
 test("schemas are emitted in the requested language", () => {

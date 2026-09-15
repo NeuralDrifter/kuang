@@ -7,7 +7,7 @@ says what it is, why it matters, and what fixing it looks like.
 fixed on the spot; move entries to _Fixed_ rather than deleting them, so the
 history of what went wrong stays readable.
 
-Last reviewed against `d57f22d` on 2026-09-14. Nothing here is a surprise —
+Last reviewed against `9c3b74d` on 2026-09-15. Nothing here is a surprise —
 these were found during development and deliberately deferred rather than
 missed.
 
@@ -15,29 +15,17 @@ missed.
 
 ## 1. Security — must be fixed before any release
 
-### 1.1 Approval rules still generalise over the argument tail
+**Nothing outstanding.** Both entries that lived here are closed:
 
-**Where:** `packages/agent/src/core/approvals.ts`, `patternFor`
+- Approval rules no longer generalise from a pattern that names no verb, and a
+  denylist covers the programs that are unsafe even with one. The fix shipped
+  **before** persistence, which is the order the gate required.
+- Path containment resolves symlinks and junctions, on the project root as well
+  as the target.
 
-The escalation that used to live here is closed: a two-word pattern whose
-second word is an option now derives nothing (`rm -f x` no longer becomes
-`rm -f*`, which equalled the pattern from `rm -f -r /`), and a denylist refuses
-`rm`, `dd`, `mv`, `chmod`, `sudo` and friends however the rule is phrased.
-
-What remains is narrower and deliberate. A rule that names a verb still covers
-any tail after it: approving `npm run build` permits `npm run <any script>`.
-Commands that could chain are refused at derivation _and_ at matching, so
-`pnpm test; rm -rf ~` is never covered by `pnpm test*`.
-
-That residue is the point of the feature — a rule useless for anything but the
-exact command already approved would not be worth storing. It is recorded here
-so it is not mistaken for an oversight.
-
-**Still outstanding:** rules are not yet scoped to a project, so once they are
-persisted a rule approved in one repository would apply in another. That lands
-with persistence in
-[design/stage-4-persistence.md](design/stage-4-persistence.md) Task 3, and must
-not ship after it.
+What a stored rule still does — cover the argument tail after a verb, so
+`npm run build` permits `npm run <script>` — is the feature working, and is
+recorded under §6 rather than here.
 
 ## 2. Correctness
 
@@ -151,25 +139,26 @@ refusal. Full inventory and the design rule are in
 
 ### 4.1 Dead code
 
-Confirmed as having no non-test caller:
+Cleared. `matchesPattern` and `ToolRegistry.dispatch` are deleted — the glob
+tool grew its own translation and the loop runs tools directly.
+`ApprovalStore.rules()` turned out not to be dead at all: it is what the
+persistence hook reads.
 
-| Symbol                  | File                     | Note                                                                                                |
-| ----------------------- | ------------------------ | --------------------------------------------------------------------------------------------------- |
-| `matchesPattern`        | `core/approvals.ts`      | Obsolete once `glob` grew its own `globToRegExp`. Delete it and its tests, or document why it stays |
-| `ToolRegistry.dispatch` | `core/tools/registry.ts` | The loop calls `tool.run` directly now                                                              |
-| `GATED_ARG.read_file`   | `core/approvals.ts`      | Unreachable — `read_file` is auto-tier, so approvals are never consulted for it                     |
-| `ApprovalStore.rules()` | `core/approvals.ts`      | Intentional: the persistence hook. Keep, but say so in a comment                                    |
+`GATED_ARG.read_file` stays and is still unreachable, because `read_file` is
+auto-tier so approvals are never consulted for it. It is left deliberately: the
+entry is what would have to change first if that tier were ever raised, and
+removing it would hide that.
 
 ### 4.2 Tests that are weaker than they look
 
-- **Containment has one test.** Mid-path `..`, absolute paths and the prefix
-  collision were all verified by review and by hand, but only
-  `../../../etc/passwd` is pinned against regression.
-- **No test exercises a single-word approval rule.** One line asserting an `ls`
-  rule does not authorise `lsof -i` would restore the coverage lost when that
-  test was rebased onto a two-word command.
-- **`"an option in second position does not authorise every flag of a binary"`**
-  over-claims: it only proves a _different_ second word is rejected. Rename it.
+Cleared. Containment now has symlink and junction cases (the junction ones run
+on Windows, where unprivileged symlinks are refused, so the check is not
+untested on the platform it was written on). The single-word approval rule is
+pinned — approving `ls` does not authorise `lsof -i`. And the test that claimed
+an option in second position "does not authorise every flag of a binary" only
+ever proved that a _different_ second word was rejected; it is renamed to what
+it actually shows, and the behaviour it seemed to promise is now covered by the
+rule that such a pattern is never derived at all.
 
 ### 4.3 Renderer polish
 
@@ -225,6 +214,13 @@ e.g. `tools/generate-reference.ts` will demand a header nobody expects.
 ## 6. Deferred by decision, not defect
 
 These are choices, recorded so they are not mistaken for oversights.
+
+- **An approval rule covers the argument tail after its verb.** `npm run build`
+  approved once permits `npm run <any script>`. A rule that covered only the
+  exact command already approved would not be worth storing, so this is the
+  feature rather than a gap. Commands that could chain are refused at
+  derivation _and_ at matching, and the denylist and verb rule bound what can
+  become a rule at all.
 
 - **The npm package is still `bailian-cli@1.24.0`.** Only the binary was renamed
   to `kuang`. `"bailian-cli"` is the filter key in `pnpm --filter bailian-cli`,

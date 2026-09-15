@@ -109,18 +109,6 @@ function isNeverGeneralised(word: string): boolean {
 }
 
 /**
- * Anchored glob match. `*` matches within a path segment, `**` across
- * segments. Exported for Task 8's `glob` tool; approvals themselves compare
- * derived patterns for equality rather than globbing.
- */
-export function matchesPattern(pattern: string, value: string): boolean {
-  const escaped = pattern.replace(/[.+^${}()|[\]\\?]/g, "\\$&");
-  // Single pass, so `**` is consumed before `*` can match its first star.
-  const source = "^" + escaped.replace(/\*\*|\*/g, (m) => (m === "**" ? ".*" : "[^/]*")) + "$";
-  return new RegExp(source).test(value);
-}
-
-/**
  * Normalise a path to forward slashes and resolve `.` / `..` segments.
  * Returns undefined for an absolute path, or one that climbs out of the
  * project — neither can be expressed as a project-relative rule.
@@ -229,7 +217,7 @@ export class ApprovalStore {
     this.onChange?.(this.rules());
   }
 
-  /** The current rules, for persistence to ~/.bailian/agent/approvals.json. */
+  /** The current rules. Read by the persistence hook above. */
   rules(): ApprovalRule[] {
     return [...this.ruleList];
   }

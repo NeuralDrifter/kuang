@@ -1,6 +1,6 @@
 # Stage 4 — persistence, and the safety it unblocks
 
-Status: Tasks 1–5 and 4b done. Task 6 (docs, retiring §1.1) remains. Stage 3 (redaction) is complete; see
+Status: **complete.** All tasks done; §1.1 retired from KNOWN_ISSUES. Stage 3 (redaction) is complete; see
 [stage-3-redaction.md](stage-3-redaction.md).
 
 ## Why these ship together
