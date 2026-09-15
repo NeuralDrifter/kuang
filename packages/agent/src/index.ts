@@ -30,6 +30,8 @@ import {
   saveSession,
   type SessionRecord,
 } from "./core/session.ts";
+import { forgetVault, hasVault, loadVault, saveVault } from "./core/redact/vault-file.ts";
+import { MutableOutput, passphraseAsker, type PassphraseAsker } from "./core/secret-prompt.ts";
 import { handleSlash } from "./core/slash.ts";
 import { bailianTools } from "./core/tools/bailian.ts";
 import { fsTools } from "./core/tools/fs.ts";
@@ -79,6 +81,15 @@ export interface AgentOptions {
   resume?: string;
   /** Resume the most recent session for this project. */
   continueLatest?: boolean;
+  /**
+   * Keep the vault on disk, sealed with a passphrase, so a resumed session can
+   * still show values captured before the restart.
+   *
+   * Off by default, and that default is the point: the vault has always lived
+   * in memory and died with the session, and writing secrets down should be a
+   * decision someone makes rather than one they inherit.
+   */
+  saveSecrets?: boolean;
 }
 
 /** Everything the loop needs, assembled once before it starts. */
@@ -91,6 +102,10 @@ interface Session {
   opening: AgentMessage[];
   /** One line to show before the first prompt, when something is worth saying. */
   notice?: string;
+  /** Set while the vault is being kept on disk; holds the passphrase to seal with. */
+  secrets: { passphrase: string } | undefined;
+  /** Whether this conversation came off disk rather than starting fresh. */
+  resumed: boolean;
   tools: ToolRegistry;
   approvals: ApprovalStore;
   vault: Vault;
@@ -147,6 +162,41 @@ const RESUMED_REDACTED: LocalizedText = {
   "zh-CN": " 重启前脱敏的数据将无法再显示。",
 };
 
+const ASK_PASSPHRASE: LocalizedText = {
+  "en-US": "Passphrase (nothing is shown as you type): ",
+  "zh-CN": "口令（输入时不会显示）：",
+};
+
+const ASK_PASSPHRASE_OPEN: LocalizedText = {
+  "en-US": "This session has saved values. Passphrase to unlock them (blank to skip): ",
+  "zh-CN": "本会话有已保存的数据。请输入口令解锁（留空跳过）：",
+};
+
+const SECRETS_SAVED: LocalizedText = {
+  "en-US": "Captured values will be kept on disk for this session, encrypted.",
+  "zh-CN": "本会话捕获的数据将加密保存在磁盘上。",
+};
+
+const SECRETS_FORGOTTEN: LocalizedText = {
+  "en-US": "Saved values deleted. The vault is back to memory only.",
+  "zh-CN": "已删除保存的数据。数据将仅保存在内存中。",
+};
+
+const SECRETS_SKIPPED: LocalizedText = {
+  "en-US": "Carrying on without them. Older placeholders will stay as they are.",
+  "zh-CN": "将不使用这些数据继续。较早的占位符将保持原样。",
+};
+
+const SECRETS_WRONG: LocalizedText = {
+  "en-US": "That passphrase does not fit this file.",
+  "zh-CN": "口令与该文件不匹配。",
+};
+
+const SECRETS_EMPTY: LocalizedText = {
+  "en-US": "Nothing saved: a passphrase is required.",
+  "zh-CN": "未保存：必须提供口令。",
+};
+
 const NO_SESSION: LocalizedText = {
   "en-US": "No session to resume in this project. Starting a new one.",
   "zh-CN": "本项目没有可恢复的会话，将开始新会话。",
@@ -184,14 +234,26 @@ function resumeNotice(
   if (!resumed) return localize(NO_SESSION, language);
 
   const turns = resumed.messages.filter((m) => m.role === "user").length;
-  const text = localize(RESUMED, language).replace("%id", resumed.id).replace("%n", String(turns));
+  return localize(RESUMED, language).replace("%id", resumed.id).replace("%n", String(turns));
+}
 
-  // The vault died with the previous process, so any placeholder in this
-  // history is now just text. Say so only when there is one to explain.
-  const PLACEHOLDER = /\[REDACTED_[A-Z_]+_\d+\]/;
-  return PLACEHOLDER.test(JSON.stringify(resumed.messages))
-    ? text + localize(RESUMED_REDACTED, language)
-    : text;
+/**
+ * Say that older placeholders are dead, but only once it is actually true.
+ *
+ * Whether it is depends on what the vault holds after any saved one has been
+ * unlocked, so this asks the vault rather than guessing ahead of it — an
+ * earlier version printed the warning before the unlock and then showed the
+ * value anyway.
+ */
+function deadPlaceholderNotice(session: Session, messages: AgentMessage[]): string | undefined {
+  // Only a resumed conversation can have stranded anything.
+  if (!session.resumed) return undefined;
+
+  // The system prompt explains the placeholder syntax using a literal example,
+  // so it contains one by construction and would trigger this on every start.
+  const history = messages.filter((m) => m.role !== "system");
+  const stranded = session.vault.unresolved(JSON.stringify(history));
+  return stranded.length > 0 ? localize(RESUMED_REDACTED, session.language).trim() : undefined;
 }
 
 /** Wire the pieces together. Construction only: nothing here runs a turn. */
@@ -209,6 +271,9 @@ async function buildSession(
 
   return {
     notice: resumeNotice(resumed, options, language),
+    secrets: undefined, // set once a passphrase is known
+    resumed: resumed !== undefined,
+
     id: resumed?.id ?? newSessionId(),
     createdAt: resumed?.createdAt ?? new Date().toISOString(),
     projectRoot: cwd,
@@ -266,10 +331,21 @@ async function repl(
   session: Session,
   readLine: ReadLine,
   write: (s: string) => void,
+  askPassphrase: PassphraseAsker,
 ): Promise<void> {
   const ask = buildAsk(readLine);
-  let messages = session.opening;
+  const messagesIn = session.opening;
+
+  // Say which conversation this is before asking anything about it: a
+  // passphrase prompt arriving first has no context to sit in.
   if (session.notice) write(session.notice + "\n");
+  await openSavedSecrets(session, askPassphrase, write);
+
+  // Only now is it known whether anything is actually stranded.
+  const stranded = deadPlaceholderNotice(session, messagesIn);
+  if (stranded) write(stranded + "\n");
+
+  let messages = messagesIn;
 
   for (;;) {
     const raw = await readLine("> ");
@@ -283,8 +359,14 @@ async function repl(
       vault: session.vault,
       projectRoot: session.projectRoot,
       sessionId: session.id,
+      savingSecrets: session.secrets !== undefined,
     });
     if (slash.kind === "exit") return;
+    if (slash.kind === "secrets") {
+      if (slash.action === "save") await startSavingSecrets(session, askPassphrase, write);
+      else stopSavingSecrets(session, write);
+      continue;
+    }
     if (slash.kind === "handled") {
       write(slash.text + "\n");
       continue;
@@ -292,6 +374,66 @@ async function repl(
 
     messages = await takeTurn(messages, input, session, ask);
     persist(session, messages);
+  }
+}
+
+/**
+ * Start keeping the vault on disk, sealing it under a passphrase the user
+ * supplies now. Refusing to accept an empty one is the whole safeguard.
+ */
+async function startSavingSecrets(
+  session: Session,
+  askPassphrase: PassphraseAsker,
+  write: (s: string) => void,
+): Promise<void> {
+  const passphrase = (await askPassphrase(localize(ASK_PASSPHRASE, session.language)))?.trim();
+  if (!passphrase) {
+    write(localize(SECRETS_EMPTY, session.language) + "\n");
+    return;
+  }
+  session.secrets = { passphrase };
+  saveVault(session.id, session.vault, passphrase);
+  write(localize(SECRETS_SAVED, session.language) + "\n");
+}
+
+/** Stop keeping it, and delete what was kept. */
+function stopSavingSecrets(session: Session, write: (s: string) => void): void {
+  session.secrets = undefined;
+  forgetVault(session.id);
+  write(localize(SECRETS_FORGOTTEN, session.language) + "\n");
+}
+
+/**
+ * Offer to unlock a resumed session's saved vault.
+ *
+ * A wrong or skipped passphrase is not a reason to refuse to start: the
+ * conversation is perfectly usable without it, and the placeholders simply
+ * stay as text — which the tool guard already handles.
+ */
+async function openSavedSecrets(
+  session: Session,
+  askPassphrase: PassphraseAsker,
+  write: (s: string) => void,
+): Promise<void> {
+  if (!hasVault(session.id)) return;
+
+  const passphrase = (await askPassphrase(localize(ASK_PASSPHRASE_OPEN, session.language)))?.trim();
+  if (!passphrase) {
+    write(localize(SECRETS_SKIPPED, session.language) + "\n");
+    return;
+  }
+
+  try {
+    const snapshot = loadVault(session.id, passphrase);
+    if (snapshot) {
+      session.vault.absorb(snapshot);
+      session.secrets = { passphrase };
+    }
+  } catch {
+    // Wrong passphrase, or a file that has been altered. Same message either
+    // way, deliberately: see redact/sealed.ts.
+    write(localize(SECRETS_WRONG, session.language) + "\n");
+    write(localize(SECRETS_SKIPPED, session.language) + "\n");
   }
 }
 
@@ -317,6 +459,7 @@ function persist(session: Session, messages: AgentMessage[]): void {
         session.vault,
       ),
     );
+    if (session.secrets) saveVault(session.id, session.vault, session.secrets.passphrase);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     session.sink({ type: "error", message: `Could not save the session: ${message}` });
@@ -338,7 +481,14 @@ export async function runAgent(
 ): Promise<void> {
   const cwd = process.cwd();
   const session = await buildSession(ctx, cwd, platform, options);
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  // readline echoes typed characters to its `output`, so a stream that can be
+  // silenced is what keeps a passphrase off the screen.
+  const output = new MutableOutput(process.stdout);
+  const rl = createInterface({
+    input: process.stdin,
+    output,
+    terminal: process.stdin.isTTY ?? false,
+  });
 
   /**
    * Not `rl.question`: that resolves with one line and discards anything else
@@ -355,8 +505,14 @@ export async function runAgent(
     return nextMessage();
   };
 
+  const write = (text: string): void => {
+    process.stdout.write(text);
+  };
+  const askPassphrase = passphraseAsker(output, () => nextMessage(), write);
+
   try {
-    await repl(session, readLine, (s) => process.stdout.write(s));
+    if (options.saveSecrets) await startSavingSecrets(session, askPassphrase, write);
+    await repl(session, readLine, write, askPassphrase);
   } finally {
     rl.close();
   }

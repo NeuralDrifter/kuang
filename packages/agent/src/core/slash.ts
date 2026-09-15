@@ -27,7 +27,13 @@ export type SlashOutcome =
   /** Leave the REPL. */
   | { kind: "exit" }
   /** Not a command. Send it to the model as an ordinary prompt. */
-  | { kind: "prompt" };
+  | { kind: "prompt" }
+  /**
+   * Start or stop keeping the vault on disk. Returned rather than done here:
+   * saving needs a passphrase, prompting for one is terminal work, and `core/`
+   * does not own a terminal.
+   */
+  | { kind: "secrets"; action: "save" | "forget" };
 
 export interface SlashContext {
   language: Language;
@@ -36,6 +42,8 @@ export interface SlashContext {
   projectRoot?: string;
   /** The session in progress, marked in the listing so it is obvious. */
   sessionId?: string;
+  /** Whether the vault is currently being kept on disk. Off by default. */
+  savingSecrets?: boolean;
 }
 
 interface SlashCommand {
@@ -85,13 +93,21 @@ const TEXT = {
     "zh-CN": "尚无已保存的会话。第一次回复后会自动保存。",
   },
   current: { "en-US": "(current)", "zh-CN": "（当前）" },
+  savingOn: {
+    "en-US": "Captured values are kept on disk for this session, encrypted.",
+    "zh-CN": "本会话捕获的数据将加密保存在磁盘上。",
+  },
+  savingOff: {
+    "en-US": "Captured values stay in memory only, and are lost when you exit.",
+    "zh-CN": "捕获的数据仅保存在内存中，退出后即丢失。",
+  },
   resumeHint: {
     "en-US": "Reopen one with:  kuang agent --resume <id>",
     "zh-CN": "使用以下命令恢复：kuang agent --resume <id>",
   },
   badArg: {
-    "en-US": "Usage: /pii [on|off|list]",
-    "zh-CN": "用法：/脱敏 [开启|关闭|列表]",
+    "en-US": "Usage: /pii [on|off|list|save|forget]",
+    "zh-CN": "用法：/脱敏 [开启|关闭|列表|保存|忘记]",
   },
 } satisfies Record<string, LocalizedText>;
 
@@ -134,6 +150,9 @@ function piiStatus(ctx: SlashContext): string {
     const phrase = total === 1 ? t("holding") : t("holdingPlural");
     lines.push(`${phrase.replace("%n", String(total))} (${breakdown})`);
   }
+  // Whether anything captured outlives this process is the other half of
+  // the answer to "what is being protected, and for how long".
+  lines.push(t(ctx.savingSecrets ? "savingOn" : "savingOff"));
   return lines.join("\n");
 }
 
@@ -145,7 +164,17 @@ const PII_ACTIONS: { matches: (word: string) => boolean; run: (ctx: SlashContext
   { matches: (w) => parseToggle(w) === false, run: (ctx) => setRedaction(ctx, false) },
 ];
 
+/** Words that ask for the vault to be kept, or not kept, on disk. */
+function secretsAction(word: string): "save" | "forget" | undefined {
+  if (["save", "keep", "保存", "记住"].includes(word)) return "save";
+  if (["forget", "nosave", "忘记", "删除"].includes(word)) return "forget";
+  return undefined;
+}
+
 function runPii(word: string, ctx: SlashContext): SlashOutcome {
+  const secrets = secretsAction(word);
+  if (secrets) return { kind: "secrets", action: secrets };
+
   const action = PII_ACTIONS.find((candidate) => candidate.matches(word));
   const text = action ? action.run(ctx) : translator(ctx.language)("badArg");
   return { kind: "handled", text };
@@ -196,7 +225,10 @@ const COMMANDS: SlashCommand[] = [
       "en-US": "Hide secrets and personal data from the model",
       "zh-CN": "对模型隐藏密钥与个人数据",
     },
-    args: { "en-US": "[on|off|list]", "zh-CN": "[开启|关闭|列表]" },
+    args: {
+      "en-US": "[on|off|list|save|forget]",
+      "zh-CN": "[开启|关闭|列表|保存|忘记]",
+    },
     run: (args, ctx) => runPii(args[0]?.toLowerCase() ?? "", ctx),
   },
   {

@@ -65,6 +65,8 @@ verified; only the live media responses are untested, for want of credits.
 - Bilingual slash commands — `/help` · `/帮助`, `/pii` · `/脱敏`, `/sessions` · `/会话`, `/exit` · `/退出`
 - **Sessions and approvals persist** — `--continue`, `--resume <id>`, and
   "always allow" answers that outlive the terminal, scoped per project
+- Optional passphrase-sealed vault (`--save-secrets`) — off by default, because
+  the vault living only in memory is the promise the rest of the design rests on
 - 232 tests — 227 headless unit tests plus 5 that drive the real CLI
 
 **Wired but not verified against the live API**
@@ -174,10 +176,30 @@ promise about a permission bit. The exception is honest: with `--redact` off
 nothing was ever captured, so the file holds whatever the conversation held.
 Redaction protects your session files too.
 
-One consequence worth knowing: the vault lives only in memory, so a placeholder
-issued before a restart cannot be turned back into its value afterwards. It
-stays visible as `[REDACTED_CARD_1]` in the history, and any tool asked to
-write one is refused rather than writing the placeholder text into a real file.
+**The vault lives in memory and dies with the session.** That is the default
+and it does not change unless you say so. A placeholder issued before a restart
+therefore cannot be turned back into its value: it stays visible as
+`[REDACTED_CARD_1]` in the history, and any tool asked to write one is refused
+rather than writing the placeholder text into a real file.
+
+If you would rather keep them, `--save-secrets` seals the vault beside the
+session with a passphrase — scrypt to derive the key, AES-256-GCM to seal it,
+both from Node's own crypto, no dependency added. The passphrase is asked for
+when saving and again when resuming, is never written down, and nothing is
+echoed as you type it:
+
+```
+$ kuang agent --redact --save-secrets
+Passphrase (nothing is shown as you type):
+```
+
+`/pii save` and `/pii forget` turn it on and off mid-conversation; forgetting
+deletes the sealed file outright. `/pii` always says which state you are in.
+
+Getting the passphrase wrong is not fatal — the conversation resumes without
+the vault, and the placeholders simply stay as text. A wrong passphrase and an
+altered file report the same thing on purpose: telling them apart would confirm
+a guess to anyone probing.
 
 It can also reach the platform. Ask for something it has no local tool for and
 it will find the command itself:

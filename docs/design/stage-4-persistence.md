@@ -1,6 +1,6 @@
 # Stage 4 — persistence, and the safety it unblocks
 
-Status: Tasks 1–5 done; 4b partly (the crypto lands, the flag does not yet). Stage 3 (redaction) is complete; see
+Status: Tasks 1–5 and 4b done. Task 6 (docs, retiring §1.1) remains. Stage 3 (redaction) is complete; see
 [stage-3-redaction.md](stage-3-redaction.md).
 
 ## Why these ship together

@@ -216,3 +216,27 @@ test("an empty project lists nothing and says how one gets made", () => {
   expect(text).toContain("No saved sessions");
   expect(text).toContain("after your first reply");
 });
+
+// ── /pii save · /pii forget ─────────────────────────────────────────────────
+
+test("saving and forgetting are returned as intents, not done here", () => {
+  // core/ has no terminal, and starting to save needs a passphrase prompt.
+  expect(handleSlash("/pii save", ctx())).toEqual({ kind: "secrets", action: "save" });
+  expect(handleSlash("/pii forget", ctx())).toEqual({ kind: "secrets", action: "forget" });
+});
+
+test("the Chinese words for saving work too", () => {
+  const c = ctx({ language: "zh-CN" });
+  expect(handleSlash("/脱敏 保存", c)).toEqual({ kind: "secrets", action: "save" });
+  expect(handleSlash("/脱敏 忘记", c)).toEqual({ kind: "secrets", action: "forget" });
+});
+
+test("the status says whether anything outlives the session", () => {
+  expect(say("/pii", ctx())).toContain("memory only");
+  expect(say("/pii", ctx({ savingSecrets: true }))).toContain("kept on disk");
+});
+
+test("in-memory is what the status reports when nothing says otherwise", () => {
+  // The default matters: it is the promise the rest of the design rests on.
+  expect(say("/pii")).toContain("lost when you exit");
+});

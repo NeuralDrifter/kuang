@@ -98,6 +98,17 @@ export function agentCommand(getCommands: () => Record<string, AnyCommand>) {
           "zh-CN": "恢复本项目中最近的一次会话",
         },
       },
+      saveSecrets: {
+        type: "switch",
+        description: {
+          "en-US":
+            "Keep redacted values on disk for this session, sealed with a passphrase " +
+            "(default: memory only). Toggle with /pii save and /pii forget",
+          "zh-CN":
+            "将本会话脱敏的数据加密保存到磁盘（默认仅保存在内存中）。" +
+            "可用 /脱敏 保存 与 /脱敏 忘记 切换",
+        },
+      },
       resume: {
         type: "string",
         valueHint: "<id>",
@@ -119,6 +130,7 @@ export function agentCommand(getCommands: () => Record<string, AnyCommand>) {
         redact: ctx.flags.redact,
         continueLatest: ctx.flags.continue,
         resume: ctx.flags.resume,
+        saveSecrets: ctx.flags.saveSecrets,
       });
     },
   });

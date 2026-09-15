@@ -29,3 +29,14 @@ export function sessionsDir(): string {
 export function sessionPath(id: string): string {
   return join(sessionsDir(), `${id}.json`);
 }
+
+/**
+ * The sealed vault belonging to a session, when the user has asked for one.
+ *
+ * Beside the session rather than inside it, so the transcript stays a file
+ * that holds no secret whatever the user decides about the vault — and so
+ * deleting the vault is deleting a file, not editing one.
+ */
+export function vaultPath(id: string): string {
+  return join(sessionsDir(), `${id}.vault.json`);
+}

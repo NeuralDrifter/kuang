@@ -28,6 +28,7 @@ Index: [index.md](index.md)
 | --- | --- | --- | --- |
 | `--redact` | switch | no | Hide secrets and personal data from the model (toggle with /pii) |
 | `--continue` | switch | no | Resume the most recent conversation in this project |
+| `--save-secrets` | switch | no | Keep redacted values on disk for this session, sealed with a passphrase (default: memory only). Toggle with /pii save and /pii forget |
 | `--resume <id>` | string | no | Resume a conversation by id (see /sessions) |
 | `--api-key <key>` | string | no | API key |
 | `--base-url <url>` | string | no | API base URL |
