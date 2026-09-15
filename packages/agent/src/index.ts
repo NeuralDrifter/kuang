@@ -11,11 +11,12 @@
  * English-speaking user regardless of what they typed.
  */
 import { createInterface } from "node:readline/promises";
-import type { CommandContext, LocalizedText } from "bailian-cli-core";
+import type { CommandContext, Language, LocalizedText } from "bailian-cli-core";
 import { ApprovalStore } from "./core/approvals.ts";
 import { loadApprovals, saveApprovals } from "./core/approvals-file.ts";
 import { createMessageReader } from "./core/input.ts";
 import type { ApprovalDecision } from "./core/approvals.ts";
+import type { EventSink } from "./core/events.ts";
 import { runTurn } from "./core/loop.ts";
 import type { ApprovalAsker } from "./core/loop.ts";
 import type { AgentMessage } from "./core/messages.ts";
@@ -26,7 +27,7 @@ import { bailianTools } from "./core/tools/bailian.ts";
 import { fsTools } from "./core/tools/fs.ts";
 import { mediaTools } from "./core/tools/media.ts";
 import { ToolRegistry } from "./core/tools/registry.ts";
-import { probeInterpreters, shellTool } from "./core/tools/shell.ts";
+import { probeInterpreters, shellTool, type Interpreter } from "./core/tools/shell.ts";
 import { dashscopeTransport } from "./core/transport.ts";
 import { plainRenderer } from "./ui/plain.ts";
 import { localize } from "./core/i18n.ts";
@@ -59,14 +60,6 @@ const SYSTEM_PROMPT: LocalizedText = {
     "切勿自行编造占位符；未曾签发的占位符会被原样输出。",
 };
 
-/**
- * Run the interactive agent until the user types `/exit`.
- *
- * `platform` is optional: without it the agent has local tools only. The
- * launcher supplies it, because the command map and the ability to re-invoke
- * the CLI both live on the product side — this package cannot reach either
- * without importing `commands`, which depends on it.
- */
 export interface AgentOptions {
   /**
    * Start with redaction on. Off by default because it is best-effort: a false
@@ -76,106 +69,173 @@ export interface AgentOptions {
   redact?: boolean;
 }
 
+/** Everything the loop needs, assembled once before it starts. */
+interface Session {
+  tools: ToolRegistry;
+  approvals: ApprovalStore;
+  vault: Vault;
+  transport: ReturnType<typeof dashscopeTransport>;
+  sink: EventSink;
+  model: string;
+  language: Language;
+}
+
+/** Every tool this agent can reach. Local always; platform only when supplied. */
+function buildTools(
+  cwd: string,
+  language: Language,
+  interpreters: Interpreter[],
+  platform?: PlatformAccess,
+): ToolRegistry {
+  const tools = new ToolRegistry();
+  for (const tool of fsTools(cwd)) tools.register(tool);
+  tools.register(shellTool(cwd, interpreters));
+  if (platform) {
+    for (const tool of mediaTools(platform, language)) tools.register(tool);
+    for (const tool of bailianTools(platform, language)) tools.register(tool);
+  }
+  return tools;
+}
+
+/**
+ * Approvals for this project, saved as answers are given rather than at exit,
+ * since the usual way a session ends is not cleanly.
+ *
+ * Rules are scoped to `cwd`: an answer given here must not apply in some other
+ * repository. A failed write is swallowed — a read-only or full disk must not
+ * break the turn in progress, and the rule still holds for the rest of this
+ * session, which is where things stood before persistence existed.
+ */
+function buildApprovals(cwd: string): ApprovalStore {
+  return new ApprovalStore(loadApprovals(cwd), (rules) => {
+    try {
+      saveApprovals(cwd, rules);
+    } catch {
+      /* see above */
+    }
+  });
+}
+
+/** Wire the pieces together. Construction only: nothing here runs a turn. */
+async function buildSession(
+  ctx: CommandContext,
+  cwd: string,
+  platform?: PlatformAccess,
+  options: AgentOptions = {},
+): Promise<Session> {
+  const language = ctx.settings.language;
+  return {
+    tools: buildTools(cwd, language, await probeInterpreters(), platform),
+    approvals: buildApprovals(cwd),
+    // Always present so `/pii on` works mid-session, whatever it started as.
+    vault: new Vault(options.redact ?? false),
+    transport: dashscopeTransport(ctx.client),
+    sink: plainRenderer((s) => process.stdout.write(s), language),
+    model: ctx.settings.defaultTextModel ?? FALLBACK_MODEL,
+    language,
+  };
+}
+
+/** Read a line of input, showing `prompt` first, or undefined at end of input. */
+type ReadLine = (prompt: string) => Promise<string | undefined>;
+
+function buildAsk(readLine: ReadLine): ApprovalAsker {
+  return async (): Promise<ApprovalDecision> => {
+    const answer = (await readLine("[y]es / [n]o / [a]lways: "))?.trim().toLowerCase();
+    if (answer === "a") return "allow_always";
+    if (answer === "y") return "allow";
+    return "deny";
+  };
+}
+
+/**
+ * One exchange: the user's message, the turn it drives, and the transcript it
+ * leaves behind.
+ *
+ * `runTurn` returns the transcript as far as it got, even on failure. If the
+ * turn never produced anything — a transport error on the very first
+ * round-trip — the user's message is still the last entry; drop it so the next
+ * turn does not send two consecutive `user` messages, which some APIs reject.
+ */
+async function takeTurn(
+  messages: AgentMessage[],
+  input: string,
+  session: Session,
+  ask: ApprovalAsker,
+): Promise<AgentMessage[]> {
+  const userMessage: AgentMessage = { role: "user", content: input };
+  const next = await runTurn([...messages, userMessage], { ...session, ask });
+  return next.at(-1) === userMessage ? next.slice(0, -1) : next;
+}
+
+/**
+ * Read, dispatch, repeat, until the user leaves or input ends.
+ *
+ * Slash commands are resolved before anything reaches the model, so a mistyped
+ * one costs nothing.
+ */
+async function repl(
+  session: Session,
+  readLine: ReadLine,
+  write: (s: string) => void,
+): Promise<void> {
+  const ask = buildAsk(readLine);
+  let messages: AgentMessage[] = [
+    { role: "system", content: localize(SYSTEM_PROMPT, session.language) },
+  ];
+
+  for (;;) {
+    const raw = await readLine("> ");
+    if (raw === undefined) return; // End of input: leave cleanly, like /exit.
+
+    const input = raw.trim();
+    if (input === "") continue;
+
+    const slash = handleSlash(input, { language: session.language, vault: session.vault });
+    if (slash.kind === "exit") return;
+    if (slash.kind === "handled") {
+      write(slash.text + "\n");
+      continue;
+    }
+
+    messages = await takeTurn(messages, input, session, ask);
+  }
+}
+
+/**
+ * Run the interactive agent until the user leaves.
+ *
+ * `platform` is optional: without it the agent has local tools only. The
+ * launcher supplies it, because the command map and the ability to re-invoke
+ * the CLI both live on the product side — this package cannot reach either
+ * without importing `commands`, which depends on it.
+ */
 export async function runAgent(
   ctx: CommandContext,
   platform?: PlatformAccess,
   options: AgentOptions = {},
 ): Promise<void> {
-  const language = ctx.settings.language;
   const cwd = process.cwd();
-
-  const tools = new ToolRegistry();
-  for (const tool of fsTools(cwd)) tools.register(tool);
-  tools.register(shellTool(cwd, await probeInterpreters()));
-  if (platform) {
-    for (const tool of mediaTools(platform, language)) tools.register(tool);
-    for (const tool of bailianTools(platform, language)) tools.register(tool);
-  }
-
-  // Rules are scoped to this project: an answer given here must not apply in
-  // some other repository. Saved as they are given rather than at exit, since
-  // the usual way a session ends is not cleanly.
-  const approvals = new ApprovalStore(loadApprovals(cwd), (rules) => {
-    try {
-      saveApprovals(cwd, rules);
-    } catch {
-      // A read-only or full disk must not break the turn in progress. The
-      // rule still applies for the rest of this session; it just will not
-      // outlive it, which is where we started.
-    }
-  });
-
-  // Always present so `/pii on` works mid-session, whatever it started as.
-  const vault = new Vault(options.redact ?? false);
-  const transport = dashscopeTransport(ctx.client);
-  const sink = plainRenderer((s) => process.stdout.write(s), language);
-  const model = ctx.settings.defaultTextModel ?? FALLBACK_MODEL;
-
+  const session = await buildSession(ctx, cwd, platform, options);
   const rl = createInterface({ input: process.stdin, output: process.stdout });
 
   /**
-   * Read the next message, or `undefined` at EOF.
-   *
    * Not `rl.question`: that resolves with one line and discards anything else
    * that arrived in the same chunk, so a pasted stack trace reached the model
-   * as its first line alone. The reader listens continuously, and joins lines
+   * as its first line alone. The reader listens continuously and joins lines
    * that arrive together into one message — see `core/input.ts`.
    *
    * The prompt is written here rather than passed to readline, because one
    * prompt belongs to one message, not to each line of a paste.
    */
   const nextMessage = createMessageReader(rl);
-  const readLine = async (prompt: string): Promise<string | undefined> => {
+  const readLine: ReadLine = async (prompt) => {
     process.stdout.write(prompt);
     return nextMessage();
   };
 
-  const ask: ApprovalAsker = async (): Promise<ApprovalDecision> => {
-    const answer = (await readLine("[y]es / [n]o / [a]lways: "))?.trim().toLowerCase();
-    if (answer === "a") return "allow_always";
-    if (answer === "y") return "allow";
-    return "deny";
-  };
-
-  let messages: AgentMessage[] = [{ role: "system", content: localize(SYSTEM_PROMPT, language) }];
-
   try {
-    for (;;) {
-      const raw = await readLine("> ");
-      if (raw === undefined) return; // EOF: leave cleanly, exactly like /exit.
-      const input = raw.trim();
-      if (input === "") continue;
-
-      const slash = handleSlash(input, { language, vault });
-      if (slash.kind === "exit") return;
-      if (slash.kind === "handled") {
-        process.stdout.write(`${slash.text}
-`);
-        continue;
-      }
-
-      const userMessage: AgentMessage = { role: "user", content: input };
-      messages.push(userMessage);
-      messages = await runTurn(messages, {
-        transport,
-        tools,
-        approvals,
-        ask,
-        sink,
-        model,
-        language,
-        vault,
-      });
-
-      // `runTurn` returns the transcript as far as it got, even on failure. If
-      // the turn never produced anything — a transport error on the very first
-      // round-trip — the user's message is still the last entry; drop it so
-      // the next turn doesn't send two consecutive `user` messages, which some
-      // APIs reject outright.
-      if (messages.at(-1) === userMessage) {
-        messages.pop();
-      }
-    }
+    await repl(session, readLine, (s) => process.stdout.write(s));
   } finally {
     rl.close();
   }

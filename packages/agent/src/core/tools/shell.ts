@@ -21,7 +21,7 @@
  * directly (see CVE-2024-27980), so offering it there would be an interpreter
  * that appears available but fails every call.
  */
-import { execFile } from "node:child_process";
+import { execFile, type ExecFileException } from "node:child_process";
 import type { Tool } from "./registry.ts";
 import type { ToolPreview } from "../events.ts";
 
@@ -104,6 +104,33 @@ export interface ShellToolOptions {
 }
 
 /** The shell tool: runs a command in an explicitly chosen, available interpreter. */
+/**
+ * A failed run described for the model, or undefined when the failure is not
+ * one the model can act on.
+ *
+ * Kept out of the callback so the happy path there is two lines. Every case
+ * below still carries `output`: the model needs to see how far the command got.
+ */
+function describeFailure(
+  err: ExecFileException,
+  output: string,
+  timeoutMs: number,
+): string | undefined {
+  // A genuine nonzero exit — not a spawn, timeout, or buffer fault.
+  if (typeof err.code === "number") return `Exit code ${err.code}:\n${output}`;
+
+  // The timeout fired. Node reports this with a non-numeric `code` (often
+  // null) plus `killed: true`, and still hands back what was written so far.
+  if (err.killed) return `Timed out after ${timeoutMs / 1000}s (killed).\n${output}`;
+
+  if (err.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
+    return `Output exceeded 10 MB (truncated).\n${output}`;
+  }
+
+  // A spawn-level failure (ENOENT, EACCES, ...): there is no output at all.
+  return undefined;
+}
+
 export function shellTool(root: string, available: Interpreter[], opts?: ShellToolOptions): Tool {
   const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -128,40 +155,27 @@ export function shellTool(root: string, available: Interpreter[], opts?: ShellTo
       if (!available.includes(interpreter)) {
         throw new Error(`Interpreter "${interpreter}" is not available on this machine.`);
       }
+
       const { bin, args: argv } = interpreterArgv(interpreter, command);
       return new Promise((resolve, reject) => {
-        execFile(
-          bin,
-          argv,
-          { cwd: root, timeout: timeoutMs, maxBuffer: MAX_BUFFER_BYTES, windowsHide: true },
-          (err, stdout, stderr) => {
-            const output = `${stdout}${stderr}`;
-            if (!err) {
-              resolve(output);
-              return;
-            }
-            if (typeof err.code === "number") {
-              // A genuine nonzero exit — not a spawn/timeout/buffer fault.
-              resolve(`Exit code ${err.code}:\n${output}`);
-              return;
-            }
-            if (err.killed) {
-              // The 120 s (or configured) timeout fired. Node reports this with
-              // a non-numeric `code` (often null) plus `killed: true`, and it
-              // still hands back whatever the process had written so far — the
-              // model needs that partial output to see how far it got.
-              resolve(`Timed out after ${timeoutMs / 1000}s (killed).\n${output}`);
-              return;
-            }
-            if (err.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
-              resolve(`Output exceeded 10 MB (truncated).\n${output}`);
-              return;
-            }
-            // A genuine spawn-level failure (ENOENT, EACCES, ...): there is no
-            // output to show, so this is the one case that should reject.
-            reject(err);
-          },
-        );
+        const spawnOptions = {
+          cwd: root,
+          timeout: timeoutMs,
+          maxBuffer: MAX_BUFFER_BYTES,
+          windowsHide: true,
+        };
+        execFile(bin, argv, spawnOptions, (err, stdout, stderr) => {
+          const output = `${stdout}${stderr}`;
+          if (!err) {
+            resolve(output);
+            return;
+          }
+          const described = describeFailure(err, output, timeoutMs);
+          // A failure with no output to show is the one case the model cannot
+          // learn anything from, so it is the one case that rejects.
+          if (described === undefined) reject(err);
+          else resolve(described);
+        });
       });
     },
     preview: async (args): Promise<ToolPreview> => {

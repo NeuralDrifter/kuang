@@ -379,6 +379,69 @@ function globTool(root: string): Tool {
   };
 }
 
+/**
+ * The text of a file worth searching, or undefined when it is not one.
+ *
+ * Unreadable, oversized and binary files are all "skip this file" to a caller,
+ * so they answer with the same `undefined` rather than three shapes of failure
+ * inline in the scan loop.
+ */
+async function searchableText(abs: string): Promise<string | undefined> {
+  try {
+    if ((await stat(abs)).size > MAX_GREP_FILE_BYTES) return undefined;
+    if (await isProbablyBinary(abs)) return undefined;
+    return await readFile(abs, "utf-8");
+  } catch {
+    // Vanished, locked, or not a file. Nothing to search either way.
+    return undefined;
+  }
+}
+
+/** `path:line: text` for every line of `text` containing `pattern`. */
+function matchingLines(relPath: string, text: string, pattern: string): string[] {
+  const out: string[] = [];
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes(pattern)) out.push(`${relPath}:${i + 1}: ${lines[i]}`);
+  }
+  return out;
+}
+
+/** Project files a glob admits, directories excluded. */
+function searchableFiles(resolvedRoot: string, glob: string | undefined): string[] {
+  const admits = glob === undefined ? undefined : globToRegExp(glob);
+  return walk(resolvedRoot, resolvedRoot)
+    .filter((entry) => !entry.isDir && (admits === undefined || admits.test(entry.path)))
+    .map((entry) => entry.path);
+}
+
+/** Matches across the project, stopping once the cap is reached. */
+async function collectMatches(
+  resolvedRoot: string,
+  pattern: string,
+  glob: string | undefined,
+): Promise<{ lines: string[]; truncated: boolean }> {
+  const lines: string[] = [];
+
+  for (const relPath of searchableFiles(resolvedRoot, glob)) {
+    const text = await searchableText(join(resolvedRoot, relPath));
+    if (text === undefined) continue;
+
+    for (const line of matchingLines(relPath, text, pattern)) {
+      if (lines.length >= MAX_GREP_MATCHES) return { lines, truncated: true };
+      lines.push(line);
+    }
+  }
+  return { lines, truncated: false };
+}
+
+function renderMatches({ lines, truncated }: { lines: string[]; truncated: boolean }): string {
+  const all = truncated
+    ? [...lines, `(output truncated at ${MAX_GREP_MATCHES} matching lines)`]
+    : lines;
+  return all.join("\n");
+}
+
 function grepTool(root: string): Tool {
   return {
     name: "grep",
@@ -402,54 +465,8 @@ function grepTool(root: string): Tool {
     },
     run: async (args) => {
       const pattern = String(args.pattern);
-      const globPattern = typeof args.glob === "string" ? args.glob : undefined;
-      const globRegex = globPattern === undefined ? undefined : globToRegExp(globPattern);
-      const resolvedRoot = resolve(root);
-      const files = walk(resolvedRoot, resolvedRoot)
-        .filter((e) => !e.isDir && (globRegex === undefined || globRegex.test(e.path)))
-        .map((e) => e.path);
-      const matches: string[] = [];
-      let truncated = false;
-      for (const relPath of files) {
-        if (truncated) break;
-        const abs = join(resolvedRoot, relPath);
-
-        let fileInfo;
-        try {
-          fileInfo = await stat(abs);
-        } catch {
-          continue;
-        }
-        if (fileInfo.size > MAX_GREP_FILE_BYTES) continue;
-
-        let binary: boolean;
-        try {
-          binary = await isProbablyBinary(abs);
-        } catch {
-          continue;
-        }
-        if (binary) continue;
-
-        let text: string;
-        try {
-          text = await readFile(abs, "utf-8");
-        } catch {
-          continue;
-        }
-        const lines = text.split("\n");
-        for (let i = 0; i < lines.length; i++) {
-          if (!lines[i].includes(pattern)) continue;
-          if (matches.length >= MAX_GREP_MATCHES) {
-            truncated = true;
-            break;
-          }
-          matches.push(`${relPath}:${i + 1}: ${lines[i]}`);
-        }
-      }
-      if (truncated) {
-        matches.push(`(output truncated at ${MAX_GREP_MATCHES} matching lines)`);
-      }
-      return matches.join("\n");
+      const glob = typeof args.glob === "string" ? args.glob : undefined;
+      return renderMatches(await collectMatches(resolve(root), pattern, glob));
     },
   };
 }

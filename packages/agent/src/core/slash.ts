@@ -97,8 +97,13 @@ function table(rows: [string, string][], indent = "  "): string {
   return rows.map(([left, right]) => `${indent}${left.padEnd(width)}  ${right}`).join("\n");
 }
 
+/** Resolve this module's bilingual strings for one session's language. */
+function translator(language: Language): (key: keyof typeof TEXT) => string {
+  return (key) => localize(TEXT[key], language);
+}
+
 function piiStatus(ctx: SlashContext): string {
-  const t = (key: keyof typeof TEXT): string => localize(TEXT[key], ctx.language);
+  const t = translator(ctx.language);
   const state = ctx.vault.enabled ? t("on") : t("off");
   const { total, byRule } = ctx.vault.stats();
 
@@ -117,6 +122,37 @@ function piiStatus(ctx: SlashContext): string {
   return lines.join("\n");
 }
 
+/** What `/pii <word>` does. Each entry answers for one word, in either language. */
+const PII_ACTIONS: { matches: (word: string) => boolean; run: (ctx: SlashContext) => string }[] = [
+  { matches: (w) => w === "", run: piiStatus },
+  { matches: isList, run: piiCoverage },
+  { matches: (w) => parseToggle(w) === true, run: (ctx) => setRedaction(ctx, true) },
+  { matches: (w) => parseToggle(w) === false, run: (ctx) => setRedaction(ctx, false) },
+];
+
+function runPii(word: string, ctx: SlashContext): SlashOutcome {
+  const action = PII_ACTIONS.find((candidate) => candidate.matches(word));
+  const text = action ? action.run(ctx) : translator(ctx.language)("badArg");
+  return { kind: "handled", text };
+}
+
+/** Everything the rules cover, built from the rules themselves so it cannot drift. */
+function piiCoverage(ctx: SlashContext): string {
+  const t = translator(ctx.language);
+  const rows = RULES.map((rule): [string, string] => [rule.id, localize(rule.label, ctx.language)]);
+  return `${t("coverage")}\n${table(rows)}\n\n${t("bestEffort")}`;
+}
+
+function setRedaction(ctx: SlashContext, on: boolean): string {
+  const held = ctx.vault.stats().total;
+  ctx.vault.setEnabled(on);
+  // Turning it off does not strand what the model is already holding, and
+  // saying so avoids the reasonable worry that it might. With nothing held
+  // there is no worry to answer, and the line is just noise.
+  const note = !on && held > 0 ? "\n" + translator(ctx.language)("stillRestoring") : "";
+  return piiStatus(ctx) + note;
+}
+
 const COMMANDS: SlashCommand[] = [
   {
     names: ["help", "帮助", "?"],
@@ -130,34 +166,7 @@ const COMMANDS: SlashCommand[] = [
       "zh-CN": "对模型隐藏密钥与个人数据",
     },
     args: { "en-US": "[on|off|list]", "zh-CN": "[开启|关闭|列表]" },
-    run: (args, ctx) => {
-      const t = (key: keyof typeof TEXT): string => localize(TEXT[key], ctx.language);
-      const word = args[0]?.toLowerCase() ?? "";
-
-      if (word === "") return { kind: "handled", text: piiStatus(ctx) };
-
-      if (isList(word)) {
-        const rows = RULES.map((rule): [string, string] => [
-          rule.id,
-          localize(rule.label, ctx.language),
-        ]);
-        return {
-          kind: "handled",
-          text: `${t("coverage")}\n${table(rows)}\n\n${t("bestEffort")}`,
-        };
-      }
-
-      const on = parseToggle(word);
-      if (on === undefined) return { kind: "handled", text: t("badArg") };
-
-      const held = ctx.vault.stats().total;
-      ctx.vault.setEnabled(on);
-      // Turning it off does not strand what the model is already holding, and
-      // saying so avoids the reasonable worry that it might. With nothing held
-      // there is no worry to answer, and the line is just noise.
-      const note = !on && held > 0 ? `\n${t("stillRestoring")}` : "";
-      return { kind: "handled", text: piiStatus(ctx) + note };
-    },
+    run: (args, ctx) => runPii(args[0]?.toLowerCase() ?? "", ctx),
   },
   {
     names: ["exit", "退出", "quit"],

@@ -95,3 +95,25 @@ export function writeJson(path: string, value: unknown): void {
     throw err;
   }
 }
+
+/**
+ * Read a record this build understands, or `undefined`.
+ *
+ * Both persisted shapes — approvals and sessions — carry a version and are
+ * refused when it is not the one expected, rather than being interpreted
+ * hopefully. Misreading a future shape could widen a permission or resurrect a
+ * transcript wrongly; being asked again, or starting fresh, is the safe
+ * failure. Shared so there is one such decision, not one per file.
+ */
+export function readVersioned<T>(
+  path: string,
+  version: number,
+  isValid: (value: Record<string, unknown>) => boolean,
+): T | undefined {
+  const raw = readJson<unknown>(path, undefined);
+  if (typeof raw !== "object" || raw === null) return undefined;
+
+  const record = raw as Record<string, unknown>;
+  if (record.version !== version) return undefined;
+  return isValid(record) ? (record as T) : undefined;
+}

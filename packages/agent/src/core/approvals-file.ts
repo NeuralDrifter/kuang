@@ -18,7 +18,7 @@
 import { resolve } from "node:path";
 import type { ApprovalRule } from "./approvals.ts";
 import { approvalsPath } from "./paths.ts";
-import { readJson, writeJson } from "./store.ts";
+import { readVersioned, writeJson } from "./store.ts";
 
 /** Bumped only when the shape changes incompatibly. */
 const VERSION = 1;
@@ -48,18 +48,15 @@ function usable(value: unknown): value is ApprovalRule {
 
 /**
  * Read the file, or the empty set when it is absent, damaged, or written by a
- * version this build does not understand. Refusing to interpret an unknown
- * version fails closed: the worst case is being asked again.
+ * version this build does not understand.
  */
 function load(path: string): ApprovalsFile {
-  const raw = readJson<unknown>(path, empty());
-  if (typeof raw !== "object" || raw === null) return empty();
-
-  const file = raw as Partial<ApprovalsFile>;
-  if (file.version !== VERSION) return empty();
-  if (typeof file.projects !== "object" || file.projects === null) return empty();
-
-  return { version: VERSION, projects: file.projects };
+  const file = readVersioned<ApprovalsFile>(
+    path,
+    VERSION,
+    (record) => typeof record.projects === "object" && record.projects !== null,
+  );
+  return file ? { version: VERSION, projects: file.projects } : empty();
 }
 
 /** The rules approved for `projectRoot`, ignoring anything malformed. */

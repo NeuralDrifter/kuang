@@ -20,8 +20,27 @@
  */
 import { findMatches } from "./rules.ts";
 
+/**
+ * The placeholder format, in one place.
+ *
+ * The shape was previously known to three pieces of code — the scanning regex,
+ * the template that builds one, and index arithmetic that picked the rule id
+ * back out. Changing the format meant finding all three.
+ */
+const PREFIX = "[REDACTED_";
+const SUFFIX = "]";
+
 /** Issued placeholders match this exactly — case-sensitive, numbered. */
 const PLACEHOLDER = /\[REDACTED_[A-Z_]+_\d+\]/g;
+
+function placeholderText(ruleId: string, n: number): string {
+  return `${PREFIX}${ruleId}_${n}${SUFFIX}`;
+}
+
+/** The rule a placeholder was issued for. Rule ids may contain underscores. */
+function ruleIdOf(placeholder: string): string {
+  return placeholder.slice(PREFIX.length, placeholder.lastIndexOf("_"));
+}
 
 /** A vault's contents, as persisted. Holds real values — handle accordingly. */
 export interface VaultSnapshot {
@@ -149,7 +168,7 @@ export class Vault {
   stats(): { total: number; byRule: Record<string, number> } {
     const byRule: Record<string, number> = {};
     for (const placeholder of this.toValue.keys()) {
-      const id = placeholder.slice("[REDACTED_".length, placeholder.lastIndexOf("_"));
+      const id = ruleIdOf(placeholder);
       byRule[id] = (byRule[id] ?? 0) + 1;
     }
     return { total: this.toValue.size, byRule };
@@ -162,7 +181,7 @@ export class Vault {
     const next = (this.counters.get(ruleId) ?? 0) + 1;
     this.counters.set(ruleId, next);
 
-    const placeholder = `[REDACTED_${ruleId}_${next}]`;
+    const placeholder = placeholderText(ruleId, next);
     this.toPlaceholder.set(value, placeholder);
     this.toValue.set(placeholder, value);
     return placeholder;

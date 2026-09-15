@@ -182,81 +182,94 @@ async function consumeStream(
  * name, unparsable arguments) — so a renderer keying a per-call row off
  * `callId` never has one stuck pending.
  */
-async function resolveCall(call: ToolCall, options: LoopOptions): Promise<AgentMessage> {
-  const { tools, approvals, ask, sink } = options;
+/** A refusal to run, phrased for both the renderer and the model. */
+interface Refusal {
+  /** One line for the user. */
+  summary: string;
+  /** What the model is told, which should say how to proceed. */
+  content: string;
+}
 
-  const refuse = (reason: string, content: string): AgentMessage => {
-    sink({ type: "tool_result", callId: call.id, ok: false, summary: reason });
-    return { role: "tool", toolCallId: call.id, content };
-  };
+type Bilingual = { "en-US": string; "zh-CN": string };
 
-  let args: Record<string, unknown>;
-  try {
-    // Restore before parsing: a placeholder reaching a tool unrestored would
-    // write `[REDACTED_CARD_1]` into a real file.
-    const raw = options.vault ? options.vault.restore(call.arguments) : call.arguments;
+function say(text: Bilingual, language: Language): string {
+  return language === "zh-CN" ? text["zh-CN"] : text["en-US"];
+}
 
-    // A placeholder that survived restoration is one this vault never issued —
-    // invented by the model, or inherited from a session whose vault is gone.
-    // Running the tool would write the placeholder text itself into a real
-    // file. Refuse, and say so in terms the model can act on.
-    const unresolved = options.vault?.unresolved(raw) ?? [];
-    if (unresolved.length > 0) {
-      const list = unresolved.join(", ");
-      const summary =
-        options.language === "zh-CN"
-          ? `无法还原的占位符: ${list}`
-          : `Unresolvable placeholder: ${list}`;
-      return refuse(
-        summary,
-        `These placeholders were never issued in this session and cannot be ` +
+/**
+ * The arguments to run with, or why they cannot be used.
+ *
+ * Two things can go wrong before a tool is even chosen, and both are the
+ * model's mistake rather than the user's, so both answer with something it can
+ * act on.
+ */
+function argumentsFor(
+  call: ToolCall,
+  options: LoopOptions,
+): { args: Record<string, unknown> } | { refusal: Refusal } {
+  // Restore before parsing: a placeholder reaching a tool unrestored would
+  // write `[REDACTED_CARD_1]` into a real file.
+  const raw = options.vault ? options.vault.restore(call.arguments) : call.arguments;
+
+  // A placeholder that survived restoration is one this vault never issued —
+  // invented by the model, or inherited from a session whose vault is gone.
+  const unresolved = options.vault?.unresolved(raw) ?? [];
+  if (unresolved.length > 0) {
+    const list = unresolved.join(", ");
+    return {
+      refusal: {
+        summary: say(
+          { "en-US": `Unresolvable placeholder: ${list}`, "zh-CN": `无法还原的占位符: ${list}` },
+          options.language,
+        ),
+        content:
+          `These placeholders were never issued in this session and cannot be ` +
           `resolved to a value: ${list}. Do not invent placeholders. If you need ` +
           `a value you cannot see, ask the user for it instead of guessing.`,
-      );
-    }
+      },
+    };
+  }
 
-    args = JSON.parse(raw) as Record<string, unknown>;
+  try {
+    return { args: JSON.parse(raw) as Record<string, unknown> };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const summary =
-      options.language === "zh-CN"
-        ? `无效的 JSON 参数: ${message}`
-        : `Invalid JSON arguments: ${message}`;
-    return refuse(summary, `Could not parse arguments as JSON: ${message}`);
+    return {
+      refusal: {
+        summary: say(
+          {
+            "en-US": `Invalid JSON arguments: ${message}`,
+            "zh-CN": `无效的 JSON 参数: ${message}`,
+          },
+          options.language,
+        ),
+        content: `Could not parse arguments as JSON: ${message}`,
+      },
+    };
   }
+}
 
-  const tool = tools.get(call.name);
-  if (!tool) {
-    const summary =
-      options.language === "zh-CN" ? `未知工具: ${call.name}` : `Unknown tool: ${call.name}`;
-    return refuse(summary, `Unknown tool: ${call.name}`);
-  }
-
-  const runAndReport = async (): Promise<AgentMessage> => {
-    try {
-      const result = await tool.run(args);
-      sink({ type: "tool_result", callId: call.id, ok: true, summary: result });
-      return { role: "tool", toolCallId: call.id, content: result };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      sink({ type: "tool_result", callId: call.id, ok: false, summary: message });
-      return { role: "tool", toolCallId: call.id, content: `Tool failed: ${message}` };
-    }
-  };
+/**
+ * Whether this call may run: already permitted, or permitted by the user now.
+ *
+ * Returns a refusal rather than a boolean so the reason survives — "denied"
+ * and "the prompt itself failed" are different things to tell the model.
+ */
+async function consentFor(
+  tool: Tool,
+  call: ToolCall,
+  args: Record<string, unknown>,
+  options: LoopOptions,
+): Promise<Refusal | undefined> {
+  const { approvals, ask, sink, language } = options;
 
   if (tool.tier === "never") {
-    const summary = options.language === "zh-CN" ? "不允许使用" : "Not permitted";
-    return refuse(summary, "This tool is not permitted.");
+    return {
+      summary: say({ "en-US": "Not permitted", "zh-CN": "不允许使用" }, language),
+      content: "This tool is not permitted.",
+    };
   }
-
-  if (tool.tier === "auto") {
-    return runAndReport();
-  }
-
-  // tool.tier === "ask"
-  if (approvals.isAllowed(call.name, args)) {
-    return runAndReport();
-  }
+  if (tool.tier === "auto" || approvals.isAllowed(call.name, args)) return undefined;
 
   const preview = await previewFor(tool, call, args);
   sink({ type: "tool_approval_required", call, preview });
@@ -266,21 +279,74 @@ async function resolveCall(call: ToolCall, options: LoopOptions): Promise<AgentM
     decision = await ask(call, preview);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const summary =
-      options.language === "zh-CN"
-        ? `授权提示失败: ${message}`
-        : `Approval prompt failed: ${message}`;
-    return refuse(summary, `Approval prompt failed: ${message}`);
+    return {
+      summary: say(
+        {
+          "en-US": `Approval prompt failed: ${message}`,
+          "zh-CN": `授权提示失败: ${message}`,
+        },
+        language,
+      ),
+      content: `Approval prompt failed: ${message}`,
+    };
   }
 
   if (decision === "deny") {
-    const summary = options.language === "zh-CN" ? "用户拒绝" : "Denied by the user";
-    return refuse(summary, "Denied by the user.");
+    return {
+      summary: say({ "en-US": "Denied by the user", "zh-CN": "用户拒绝" }, language),
+      content: "Denied by the user.",
+    };
   }
-  if (decision === "allow_always") {
-    approvals.allowAlways(call.name, args);
+  if (decision === "allow_always") approvals.allowAlways(call.name, args);
+  return undefined;
+}
+
+/** Run the tool, reporting either outcome as a tool message. */
+async function runTool(
+  tool: Tool,
+  call: ToolCall,
+  args: Record<string, unknown>,
+  sink: EventSink,
+): Promise<AgentMessage> {
+  try {
+    const result = await tool.run(args);
+    sink({ type: "tool_result", callId: call.id, ok: true, summary: result });
+    return { role: "tool", toolCallId: call.id, content: result };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    sink({ type: "tool_result", callId: call.id, ok: false, summary: message });
+    return { role: "tool", toolCallId: call.id, content: `Tool failed: ${message}` };
   }
-  return runAndReport();
+}
+
+/**
+ * Turn one tool call into the message that answers it.
+ *
+ * Every path returns a `tool` message, including every failure, so a renderer
+ * keying a row off `callId` never has one stuck pending.
+ */
+async function resolveCall(call: ToolCall, options: LoopOptions): Promise<AgentMessage> {
+  const refuse = ({ summary, content }: Refusal): AgentMessage => {
+    options.sink({ type: "tool_result", callId: call.id, ok: false, summary });
+    return { role: "tool", toolCallId: call.id, content };
+  };
+
+  const parsed = argumentsFor(call, options);
+  if ("refusal" in parsed) return refuse(parsed.refusal);
+
+  const tool = options.tools.get(call.name);
+  if (!tool) {
+    return refuse({
+      summary: say(
+        { "en-US": `Unknown tool: ${call.name}`, "zh-CN": `未知工具: ${call.name}` },
+        options.language,
+      ),
+      content: `Unknown tool: ${call.name}`,
+    });
+  }
+
+  const refusal = await consentFor(tool, call, parsed.args, options);
+  return refusal ? refuse(refusal) : runTool(tool, call, parsed.args, options.sink);
 }
 
 /**

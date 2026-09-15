@@ -126,109 +126,126 @@ const TEXT = {
   },
 } as const;
 
+/** Resolve a model-supplied command path, or say plainly that it is not one. */
+type ResolveCommand = (path: unknown) => CatalogEntry;
+
+function commandResolver(catalog: CatalogEntry[], language: Language): ResolveCommand {
+  return (path) => {
+    const entry = findCommand(catalog, asIdentifier(path));
+    if (entry) return entry;
+    throw new Error(
+      `${localize(TEXT.unknownCommand, language)}: ${asIdentifier(path) || "(not a string)"}`,
+    );
+  };
+}
+
+function searchCommandsTool(catalog: CatalogEntry[], language: Language): Tool {
+  return {
+    name: "bl_search_commands",
+    tier: "auto",
+    description: TEXT.searchDescription,
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Keywords, e.g. 'generate video' or 'quota'" },
+      },
+      required: ["query"],
+    },
+    run: async (args) => {
+      const hits = searchCatalog(catalog, asIdentifier(args.query));
+      if (hits.length === 0) return localize(TEXT.noMatches, language);
+      return hits.map((h) => `${h.path} — ${h.description}`).join("\n");
+    },
+  };
+}
+
+function describeCommandTool(resolve: ResolveCommand): Tool {
+  return {
+    name: "bl_describe_command",
+    tier: "auto",
+    description: TEXT.describeDescription,
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Command path, e.g. 'image generate'" },
+      },
+      required: ["path"],
+    },
+    run: async (args) => {
+      const entry = resolve(args.path);
+      return JSON.stringify(
+        {
+          path: entry.path,
+          description: entry.description,
+          schema: entry.schema,
+          requiresApproval: needsApproval(entry),
+        },
+        null,
+        2,
+      );
+    },
+  };
+}
+
+function runCommandTool(
+  catalog: CatalogEntry[],
+  resolve: ResolveCommand,
+  platform: PlatformAccess,
+  language: Language,
+): Tool {
+  return {
+    name: "bl_run_command",
+    // Conservative by default: the tier is fixed at registration, but this
+    // tool can reach any command, so it always asks. The preview shows the
+    // exact command line, which is what the user actually needs to judge it.
+    tier: "ask",
+    description: TEXT.runDescription,
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Command path, e.g. 'image generate'" },
+        flags: {
+          type: "object",
+          description: "Flag names and values, as given by bl_describe_command",
+        },
+      },
+      required: ["path"],
+    },
+    preview: async (args) => {
+      const path = asIdentifier(args.path);
+      const known = findCommand(catalog, path);
+      const line = commandLine(
+        path,
+        (args.flags ?? {}) as Record<string, unknown>,
+        platform.commands[path]?.flags ?? {},
+      );
+      // A model can invent a plausible-looking path. Say so in the prompt,
+      // rather than having the user approve something that then fails.
+      return { summary: known ? line : `${line}  [${localize(TEXT.willFail, language)}]` };
+    },
+    run: async (args) => {
+      const entry = resolve(args.path);
+      const flags = (args.flags ?? {}) as Record<string, unknown>;
+      const defs = platform.commands[entry.path]?.flags ?? {};
+      const result = await platform.invoke(buildArgv(entry.path, flags, defs));
+
+      const body = [result.stdout, result.stderr].filter((s) => s.trim()).join("\n");
+      if (!result.ok) {
+        return `${localize(TEXT.failed, language)} (exit ${result.exitCode})\n${body}`;
+      }
+      return body.trim() || "(no output)";
+    },
+  };
+}
+
 /** The three discovery tools, bound to a platform access. */
 export function bailianTools(platform: PlatformAccess, language: Language): Tool[] {
   const catalog = commandCatalog(platform.commands, language);
-
-  const resolve = (path: unknown): CatalogEntry => {
-    const entry = findCommand(catalog, asIdentifier(path));
-    if (!entry) {
-      throw new Error(
-        `${localize(TEXT.unknownCommand, language)}: ${asIdentifier(path) || "(not a string)"}`,
-      );
-    }
-    return entry;
-  };
+  const resolve = commandResolver(catalog, language);
 
   return [
-    {
-      name: "bl_search_commands",
-      tier: "auto",
-      description: TEXT.searchDescription,
-      parameters: {
-        type: "object",
-        properties: {
-          query: { type: "string", description: "Keywords, e.g. 'generate video' or 'quota'" },
-        },
-        required: ["query"],
-      },
-      run: async (args) => {
-        const hits = searchCatalog(catalog, asIdentifier(args.query));
-        if (hits.length === 0) return localize(TEXT.noMatches, language);
-        return hits.map((h) => `${h.path} — ${h.description}`).join("\n");
-      },
-    },
-
-    {
-      name: "bl_describe_command",
-      tier: "auto",
-      description: TEXT.describeDescription,
-      parameters: {
-        type: "object",
-        properties: {
-          path: { type: "string", description: "Command path, e.g. 'image generate'" },
-        },
-        required: ["path"],
-      },
-      run: async (args) => {
-        const entry = resolve(args.path);
-        return JSON.stringify(
-          {
-            path: entry.path,
-            description: entry.description,
-            schema: entry.schema,
-            requiresApproval: needsApproval(entry),
-          },
-          null,
-          2,
-        );
-      },
-    },
-
-    {
-      name: "bl_run_command",
-      // Conservative by default: the tier is fixed at registration, but this
-      // tool can reach any command, so it always asks. The preview shows the
-      // exact command line, which is what the user actually needs to judge it.
-      tier: "ask",
-      description: TEXT.runDescription,
-      parameters: {
-        type: "object",
-        properties: {
-          path: { type: "string", description: "Command path, e.g. 'image generate'" },
-          flags: {
-            type: "object",
-            description: "Flag names and values, as given by bl_describe_command",
-          },
-        },
-        required: ["path"],
-      },
-      preview: async (args) => {
-        const path = asIdentifier(args.path);
-        const known = findCommand(catalog, path);
-        const line = commandLine(
-          path,
-          (args.flags ?? {}) as Record<string, unknown>,
-          platform.commands[path]?.flags ?? {},
-        );
-        // A model can invent a plausible-looking path. Say so in the prompt,
-        // rather than having the user approve something that then fails.
-        return {
-          summary: known ? line : `${line}  [${localize(TEXT.willFail, language)}]`,
-        };
-      },
-      run: async (args) => {
-        const entry = resolve(args.path);
-        const flags = (args.flags ?? {}) as Record<string, unknown>;
-        const defs = platform.commands[entry.path]?.flags ?? {};
-        const result = await platform.invoke(buildArgv(entry.path, flags, defs));
-
-        const body = [result.stdout, result.stderr].filter((s) => s.trim()).join("\n");
-        if (!result.ok) {
-          return `${localize(TEXT.failed, language)} (exit ${result.exitCode})\n${body}`;
-        }
-        return body.trim() || "(no output)";
-      },
-    },
+    searchCommandsTool(catalog, language),
+    describeCommandTool(resolve),
+    runCommandTool(catalog, resolve, platform, language),
   ];
 }

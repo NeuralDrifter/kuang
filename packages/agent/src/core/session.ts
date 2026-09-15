@@ -24,9 +24,12 @@ import type { AgentMessage } from "./messages.ts";
 import { sessionPath, sessionsDir } from "./paths.ts";
 import { sanitizeDeep } from "./redact/apply.ts";
 import type { Vault } from "./redact/vault.ts";
-import { readJson, writeJson } from "./store.ts";
+import { readVersioned, writeJson } from "./store.ts";
 
 const VERSION = 1;
+
+/** Widest a listing title may be, so a row fits an ordinary terminal. */
+const TITLE_MAX = 72;
 
 export interface SessionRecord {
   version: number;
@@ -67,7 +70,7 @@ function titleOf(messages: AgentMessage[]): string {
   const first = messages.find((m) => m.role === "user");
   const text = typeof first?.content === "string" ? first.content : "";
   const line = text.split("\n", 1)[0]?.trim() ?? "";
-  return line.length > 72 ? `${line.slice(0, 71)}…` : line;
+  return line.length > TITLE_MAX ? `${line.slice(0, TITLE_MAX - 1)}…` : line;
 }
 
 export interface SessionMeta {
@@ -110,13 +113,11 @@ export function saveSession(record: SessionRecord, path: string = sessionPath(re
 
 /** Load by id, or undefined when absent, damaged, or from a shape we do not know. */
 export function loadSession(id: string, path: string = sessionPath(id)): SessionRecord | undefined {
-  const raw = readJson<unknown>(path, undefined);
-  if (typeof raw !== "object" || raw === null) return undefined;
-
-  const record = raw as Partial<SessionRecord>;
-  if (record.version !== VERSION) return undefined;
-  if (typeof record.id !== "string" || !Array.isArray(record.messages)) return undefined;
-  return record as SessionRecord;
+  return readVersioned<SessionRecord>(
+    path,
+    VERSION,
+    (record) => typeof record.id === "string" && Array.isArray(record.messages),
+  );
 }
 
 /**
