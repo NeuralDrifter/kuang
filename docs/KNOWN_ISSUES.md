@@ -7,7 +7,7 @@ says what it is, why it matters, and what fixing it looks like.
 fixed on the spot; move entries to _Fixed_ rather than deleting them, so the
 history of what went wrong stays readable.
 
-Last reviewed against `9c3b74d` on 2026-09-15. Nothing here is a surprise —
+Last reviewed against `27608fc` on 2026-09-15. Nothing here is a surprise —
 these were found during development and deliberately deferred rather than
 missed.
 
@@ -28,6 +28,23 @@ What a stored rule still does — cover the argument tail after a verb, so
 recorded under §6 rather than here.
 
 ## 2. Correctness
+
+### 2.0 The Ink UI denies every approval without asking
+
+**Where:** `packages/agent/src/index.ts`, `buildInkSession`
+
+The Ink path wires `buildAsk(async () => undefined)`. That resolves to
+`undefined`, which falls through to `return "deny"`, so every ask-tier tool is
+refused — `write_file`, `edit_file`, `shell`, and anything that spends media
+credits — and the user is told "Denied by the user" about something they were
+never asked.
+
+Reached only in a real terminal, since the Ink path is gated on both stdout and
+stdin being TTYs. Piped and scripted runs take the plain path, which prompts
+properly.
+
+**Fix:** Task 4 of [design/stage-5-tui.md](design/stage-5-tui.md) — the
+approval prompt as a component. Until then the plain path is the complete one.
 
 ### 2.1 `~` is not treated as shell chaining
 

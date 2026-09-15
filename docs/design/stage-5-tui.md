@@ -1,7 +1,23 @@
 # Stage 5 — the Ink terminal UI
 
-Status: planned. Stage 4 (persistence) is complete; see
+Status: **in progress.** Stage 4 (persistence) is complete; see
 [stage-4-persistence.md](stage-4-persistence.md).
+
+| Task                               | State                                         |
+| ---------------------------------- | --------------------------------------------- |
+| 1 — dependencies, renderer switch  | done (`27608fc`)                              |
+| 2 — input under raw mode           | not started; paste turned out free, see below |
+| 3 — the transcript                 | state model done and tested; components draft |
+| 4 — input line, approval prompts   | **not started — and blocking, see below**     |
+| 5 — passphrase and status          | status line drafted; passphrase not started   |
+| 6 — README, screenshots, issue log | not started                                   |
+
+> **The Ink path is not usable yet.** `buildInkSession` passes
+> `buildAsk(async () => undefined)`, which falls through to `"deny"`, so every
+> ask-tier tool — `write_file`, `edit_file`, `shell`, anything spending credits
+> — is silently refused while reporting "Denied by the user". A user would
+> think they had refused something they were never asked about. Task 4 is what
+> closes this, and until it does the plain path is the complete one.
 
 ## What this is, and what it is not
 
@@ -45,6 +61,23 @@ as a burst of keypresses instead of lines, so "arrived together" is measured on
 input chunks rather than `line` events — the 25 ms window is the same idea.
 Bracketed paste, where the terminal brackets a paste in escape sequences,
 is a better signal where it is available and worth using when it is.
+
+## What building it changed about this plan
+
+**Paste is free under raw mode.** The plan expected to rebuild coalescing on
+input chunks with a timing window. Ink hands a paste over as a single `input`
+string, so appending it whole to the draft is the entire fix — no window, no
+bracketed-paste detection. Task 2 is therefore much smaller than written.
+
+**Ink must be ESM all the way down.** It pulls `yoga-layout`, which uses
+top-level await, so any consumer or bundle that emits CJS fails at transform
+time rather than at runtime. `packages/agent` is already `"type": "module"`;
+the thing to watch is the published build.
+
+**The UI is handed callbacks, not the session.** `buildInkSession` returns
+`onSubmit` and `onCommand`, so the renderer cannot reach past them into the
+loop. That is what kept `core/` from changing at all, and it is worth
+preserving as the components grow.
 
 ## Layout
 
