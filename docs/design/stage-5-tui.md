@@ -3,14 +3,15 @@
 Status: **in progress.** Stage 4 (persistence) is complete; see
 [stage-4-persistence.md](stage-4-persistence.md).
 
-| Task                               | State                                         |
-| ---------------------------------- | --------------------------------------------- |
-| 1 — dependencies, renderer switch  | done (`27608fc`)                              |
-| 2 — input under raw mode           | not started; paste turned out free, see below |
-| 3 — the transcript                 | state model done and tested; components draft |
-| 4 — input line, approval prompts   | **not started — and blocking, see below**     |
-| 5 — passphrase and status          | status line drafted; passphrase not started   |
-| 6 — README, screenshots, issue log | not started                                   |
+| Task                               | State                                           |
+| ---------------------------------- | ----------------------------------------------- |
+| 1 — dependencies, renderer switch  | done (`27608fc`)                                |
+| 2 — input under raw mode           | mostly moot; paste is free under Ink, see below |
+| 3 — the transcript                 | done, including ordering (`19010a7`)            |
+| 4 — approval prompts               | done (`3892e0a`)                                |
+| 4b — input history and editing     | **not started** — no arrow keys, no history     |
+| 5 — status line                    | done; passphrase in Ink **not started**         |
+| 6 — README, screenshots, issue log | README done; screenshots not                    |
 
 > **Approvals now work in the Ink path.** The loop asks by awaiting a promise
 > and a component cannot be awaited, so `pending.ts` sits between them: the
