@@ -131,3 +131,59 @@ test("folding never mutates the state it was given", () => {
   expect(before.streaming).toBe("");
   expect(after).not.toBe(before);
 });
+
+// ── ordering ────────────────────────────────────────────────────────────────
+
+test("text said before a tool call stays above it", () => {
+  const state = fold([
+    { type: "turn_start" },
+    { type: "text_delta", text: "Let me look at the files." },
+    { type: "tool_call", call: { id: "c1", name: "glob", arguments: '{"pattern":"**/*.py"}' } },
+  ]);
+
+  // A model says what it is about to do and then does it. Holding the text in
+  // the streaming region until turn_end put the tool line above the sentence
+  // introducing it, and the conversation read back to front.
+  expect(state.done.map((e) => e.kind)).toEqual(["reply", "tool"]);
+  expect(state.done[0]!.text).toBe("Let me look at the files.");
+});
+
+test("text continues after a tool call as a separate line", () => {
+  const state = fold([
+    { type: "text_delta", text: "first" },
+    { type: "tool_call", call: { id: "c1", name: "glob", arguments: "{}" } },
+    { type: "text_delta", text: "second" },
+    { type: "turn_end", usage },
+  ]);
+
+  expect(state.done.map((e) => [e.kind, e.text])).toEqual([
+    ["reply", "first"],
+    ["tool", "glob({})"],
+    ["reply", "second"],
+  ]);
+});
+
+test("an approval prompt does not jump above its explanation", () => {
+  const state = fold([
+    { type: "text_delta", text: "I will write the file." },
+    {
+      type: "tool_approval_required",
+      call: { id: "c1", name: "write_file", arguments: "{}" },
+      preview: { summary: "write_file(a.ts)" },
+    },
+  ]);
+  expect(state.done.map((e) => e.kind)).toEqual(["reply", "notice"]);
+});
+
+test("a redaction notice lands after the text that triggered it", () => {
+  const state = fold([
+    { type: "text_delta", text: "Here is your card:" },
+    { type: "redacted", counts: { CARD: 1 } },
+  ]);
+  expect(state.done.map((e) => e.kind)).toEqual(["reply", "notice"]);
+});
+
+test("a tool call with no preceding text adds no empty line", () => {
+  const state = fold([{ type: "tool_call", call: { id: "c1", name: "glob", arguments: "{}" } }]);
+  expect(state.done.map((e) => e.kind)).toEqual(["tool"]);
+});

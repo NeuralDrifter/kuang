@@ -44,6 +44,24 @@ function entry(kind: EntryKind, text: string, ok?: boolean): Entry {
   return { id: nextId, kind, text, ok };
 }
 
+/**
+ * Move whatever has streamed so far into the finished part.
+ *
+ * A model usually says what it is about to do and then does it, so the text
+ * arrives before the tool call. But text lives in `streaming` until the turn
+ * ends, while a tool call is finished the moment it arrives — so without this
+ * the tool line jumps above the sentence introducing it, and the conversation
+ * reads back to front.
+ */
+function settle(state: TranscriptState): TranscriptState {
+  if (!state.streaming) return state;
+  return {
+    ...state,
+    done: [...state.done, entry("reply", state.streaming)],
+    streaming: "",
+  };
+}
+
 /** Anything the user typed that was not a command. */
 export function withUserMessage(state: TranscriptState, text: string): TranscriptState {
   return { ...state, done: [...state.done, entry("user", text)], busy: true };
@@ -68,17 +86,20 @@ export function reduce(state: TranscriptState, event: AgentEvent): TranscriptSta
     case "text_delta":
       return { ...state, streaming: state.streaming + event.text };
 
-    case "tool_call":
+    case "tool_call": {
+      const settled = settle(state);
       return {
-        ...state,
-        done: [...state.done, entry("tool", `${event.call.name}(${event.call.arguments})`)],
+        ...settled,
+        done: [...settled.done, entry("tool", `${event.call.name}(${event.call.arguments})`)],
       };
+    }
 
-    case "tool_approval_required":
+    case "tool_approval_required": {
+      const settled = settle(state);
       return {
-        ...state,
+        ...settled,
         done: [
-          ...state.done,
+          ...settled.done,
           entry(
             "notice",
             event.preview.diff
@@ -87,6 +108,7 @@ export function reduce(state: TranscriptState, event: AgentEvent): TranscriptSta
           ),
         ],
       };
+    }
 
     case "tool_result":
       return { ...state, done: [...state.done, entry("tool", event.summary, event.ok)] };
@@ -96,9 +118,10 @@ export function reduce(state: TranscriptState, event: AgentEvent): TranscriptSta
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([id, n]) => `${n} ${id}`)
         .join(", ");
+      const settled = settle(state);
       return {
-        ...state,
-        done: [...state.done, entry("notice", `Withheld from the model: ${parts}`)],
+        ...settled,
+        done: [...settled.done, entry("notice", `Withheld from the model: ${parts}`)],
       };
     }
 

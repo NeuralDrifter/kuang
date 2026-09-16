@@ -370,10 +370,16 @@ function globTool(root: string): Tool {
       const regex = globToRegExp(dirsOnly ? raw.slice(0, -1) : raw);
       const resolvedRoot = resolve(root);
 
-      return walk(resolvedRoot, resolvedRoot)
+      const hits = walk(resolvedRoot, resolvedRoot)
         .filter((e) => (dirsOnly ? e.isDir : true) && regex.test(e.path))
-        .map((e) => e.path)
-        .join("\n");
+        .map((e) => e.path);
+
+      // Say so rather than returning nothing. An empty result is ambiguous —
+      // "no matches" and "the tool failed" look identical — and a model given
+      // silence will fill it in, inventing filenames and then spending several
+      // more calls discovering they were never there.
+      if (hits.length === 0) return `No files in this project match ${raw}`;
+      return hits.join("\n");
     },
   };
 }
@@ -434,7 +440,13 @@ async function collectMatches(
   return { lines, truncated: false };
 }
 
-function renderMatches({ lines, truncated }: { lines: string[]; truncated: boolean }): string {
+function renderMatches(
+  { lines, truncated }: { lines: string[]; truncated: boolean },
+  pattern: string,
+): string {
+  // As with glob: silence invites invention.
+  if (lines.length === 0) return `No matches for ${pattern}`;
+
   const all = truncated
     ? [...lines, `(output truncated at ${MAX_GREP_MATCHES} matching lines)`]
     : lines;
@@ -465,7 +477,7 @@ function grepTool(root: string): Tool {
     run: async (args) => {
       const pattern = String(args.pattern);
       const glob = typeof args.glob === "string" ? args.glob : undefined;
-      return renderMatches(await collectMatches(resolve(root), pattern, glob));
+      return renderMatches(await collectMatches(resolve(root), pattern, glob), pattern);
     },
   };
 }

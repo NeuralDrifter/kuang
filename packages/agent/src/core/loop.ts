@@ -309,7 +309,12 @@ async function runTool(
   sink: EventSink,
 ): Promise<AgentMessage> {
   try {
-    const result = await tool.run(args);
+    const raw = await tool.run(args);
+    // A tool that answers with nothing is indistinguishable from one that
+    // failed, and a model handed silence tends to invent what it expected to
+    // see. Every tool should say so itself; this is the backstop.
+    const result = raw.trim() === "" ? "(the tool returned no output)" : raw;
+
     sink({ type: "tool_result", callId: call.id, ok: true, summary: result });
     return { role: "tool", toolCallId: call.id, content: result };
   } catch (err) {
