@@ -39,19 +39,30 @@ const COLOUR: Record<Entry["kind"], string> = {
 };
 
 const MARKER: Record<Entry["kind"], string> = {
-  user: "›",
+  user: "❯",
   reply: " ",
-  tool: "·",
-  notice: "⚠",
-  error: "✗",
+  tool: "⚙",
+  notice: "💡",
+  error: "✖",
 };
 
 export function Line({ entry }: { entry: Entry }): React.ReactElement {
   const colour = entry.ok === false ? "red" : COLOUR[entry.kind];
+  if (entry.kind === "reply") {
+    return (
+      <Box marginY={1}>
+        <Text color={colour}>{entry.text}</Text>
+      </Box>
+    );
+  }
   return (
     <Box>
-      <Text color={colour}>{MARKER[entry.kind]} </Text>
-      <Text color={colour}>{entry.text}</Text>
+      <Box width={3} justifyContent="center" alignItems="flex-start">
+        <Text color={colour}>{MARKER[entry.kind]}</Text>
+      </Box>
+      <Box flexShrink={1}>
+        <Text color={colour}>{entry.text}</Text>
+      </Box>
     </Box>
   );
 }
@@ -65,13 +76,18 @@ export function Status({
 }): React.ReactElement {
   const total = state.tokens.prompt + state.tokens.completion;
   return (
-    <Box>
-      <Text dimColor>
-        {session.model} · {session.redacting ? "redacting" : "no redaction"} ·{" "}
-        {session.id.slice(0, 15)}
-        {total > 0 ? ` · ${total} tokens` : ""}
-        {state.busy ? " · working" : ""}
-      </Text>
+    <Box justifyContent="space-between" width="100%">
+      <Box>
+        <Text dimColor>esc to cancel</Text>
+      </Box>
+      <Box>
+        <Text dimColor>
+          {session.model} · {session.redacting ? "redacting" : "no redaction"} ·{" "}
+          {session.id.slice(0, 15)}
+          {total > 0 ? ` · ${total} tokens` : ""}
+          {state.busy ? " · working" : ""}
+        </Text>
+      </Box>
     </Box>
   );
 }
@@ -90,18 +106,42 @@ export function Approval({
   question: Question<ApprovalDecision>;
 }): React.ReactElement {
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1}>
-      <Text color="yellow">Approval required</Text>
+    <Box flexDirection="column" borderStyle="round" borderColor="yellow" padding={1} marginY={1}>
+      <Box marginBottom={1}>
+        <Text color="yellow" bold>
+          ⚠️ Approval required
+        </Text>
+      </Box>
       <Text>{question.prompt}</Text>
-      {question.detail ? <Text dimColor>{question.detail}</Text> : null}
-      <Text>
-        <Text color="green">y</Text>
-        <Text dimColor>es · </Text>
-        <Text color="red">n</Text>
-        <Text dimColor>o · </Text>
-        <Text color="yellow">a</Text>
-        <Text dimColor>lways</Text>
-      </Text>
+      {question.detail ? (
+        <Box
+          marginTop={1}
+          paddingLeft={2}
+          borderStyle="single"
+          borderTop={false}
+          borderBottom={false}
+          borderRight={false}
+          borderColor="gray"
+        >
+          <Text dimColor>{question.detail}</Text>
+        </Box>
+      ) : null}
+      <Box marginTop={1}>
+        <Text>
+          <Text color="green" bold>
+            y
+          </Text>
+          <Text dimColor>es · </Text>
+          <Text color="red" bold>
+            n
+          </Text>
+          <Text dimColor>o · </Text>
+          <Text color="yellow" bold>
+            a
+          </Text>
+          <Text dimColor>lways</Text>
+        </Text>
+      </Box>
     </Box>
   );
 }

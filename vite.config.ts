@@ -123,6 +123,14 @@ export default defineConfig({
           ],
         },
       },
+      {
+        // Ink UI 是基于 React 构建的，需要 lint hook 规则。
+        files: ["packages/agent/src/ui/**/*.{ts,tsx}"],
+        rules: {
+          "react-hooks/rules-of-hooks": "error",
+          "react-hooks/exhaustive-deps": "warn",
+        },
+      },
     ],
   },
   run: {

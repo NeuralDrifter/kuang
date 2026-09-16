@@ -624,12 +624,26 @@ export interface InkWiring {
   /** Run one turn, pushing each event to `emit` as it happens. */
   onSubmit: (input: string, emit: (event: AgentEvent) => void) => Promise<void>;
   /** Handle a slash command, or return undefined when it is a prompt. */
-  onCommand: (input: string) => { text?: string; exit?: boolean } | undefined;
+  onCommand: (
+    input: string,
+  ) => { text?: string; exit?: boolean; secrets?: "save" | "forget" } | undefined;
   /**
    * Register what to do when the loop needs consent. The handler is given the
    * question to draw; answering it resolves what the loop is parked on.
    */
   setApprovalHandler: (handler: (question: Question<ApprovalDecision>) => void) => void;
+  /** Setup on app start: notice, saved secrets unlock, and --save-secrets prompt. */
+  onMount: (
+    ask: (prompt: string) => Promise<string | undefined>,
+    write: (s: string) => void,
+  ) => Promise<void>;
+  /** Triggered by `/pii save` in Ink. */
+  doSaveSecrets: (
+    ask: (prompt: string) => Promise<string | undefined>,
+    write: (s: string) => void,
+  ) => Promise<void>;
+  /** Triggered by `/pii forget` in Ink. */
+  doForgetSecrets: (write: (s: string) => void) => void;
 }
 
 /**
@@ -652,7 +666,6 @@ export async function buildInkSession(
   const session = await buildSession(ctx, cwd, () => {}, platform, options);
 
   let messages = session.opening;
-  const deferred: Deferred = { exit: false, secrets: undefined };
 
   /** Set by the UI, so consent can be asked for rather than assumed. */
   let raise: ((question: Question<ApprovalDecision>) => void) | undefined;
@@ -676,7 +689,9 @@ export async function buildInkSession(
     persist({ ...session, sink: emit }, messages);
   };
 
-  const onCommand = (input: string): { text?: string; exit?: boolean } | undefined => {
+  const onCommand = (
+    input: string,
+  ): { text?: string; exit?: boolean; secrets?: "save" | "forget" } | undefined => {
     const outcome = handleSlash(input.trim(), {
       language: session.language,
       vault: session.vault,
@@ -693,8 +708,7 @@ export async function buildInkSession(
       case "exit":
         return { exit: true };
       case "secrets":
-        deferred.secrets = outcome.action;
-        return { text: localize(SECRETS_AFTER_TURN, session.language) };
+        return { text: localize(SECRETS_AFTER_TURN, session.language), secrets: outcome.action };
     }
   };
 
@@ -705,6 +719,15 @@ export async function buildInkSession(
     setApprovalHandler: (handler) => {
       raise = handler;
     },
+    onMount: async (ask, write) => {
+      if (session.notice) write(session.notice + "\n");
+      await openSavedSecrets(session, ask, write);
+      const stranded = deadPlaceholderNotice(session, messages);
+      if (stranded) write(stranded + "\n");
+      if (options.saveSecrets) await startSavingSecrets(session, ask, write);
+    },
+    doSaveSecrets: (ask, write) => startSavingSecrets(session, ask, write),
+    doForgetSecrets: (write) => stopSavingSecrets(session, write),
   };
 }
 
