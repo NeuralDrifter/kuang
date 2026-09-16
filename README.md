@@ -64,6 +64,9 @@ are verified; only the live media responses are untested, for want of credits.
   placeholders on the way to the model and put back on the way out, so the
   model can work with them without ever reading them
 - Bilingual slash commands — `/help` · `/帮助`, `/pii` · `/脱敏`, `/sessions` · `/会话`, `/exit` · `/退出`
+- **Knows where it is** — the working directory, whether that sits inside a
+  larger repository, and the project's own `AGENTS.md` / `CLAUDE.md` / `KUANG.md`
+  brief if it has one
 - **Sessions and approvals persist** — `--continue`, `--resume <id>`, and
   "always allow" answers that outlive the terminal, scoped per project
 - Optional passphrase-sealed vault (`--save-secrets`) — off by default, because
@@ -101,11 +104,16 @@ cd kuang
 pnpm install
 ```
 
-Run it directly:
+Run it directly — **from the directory you want it to work in**, which is
+usually the repository root:
 
 ```bash
-cd packages/cli && npx tsx src/main.ts agent
+npx tsx packages/cli/src/main.ts agent
 ```
+
+The agent's file tools are scoped to where you launch it, so starting inside
+`packages/cli` gives it that package and nothing else. It is told where it is
+standing and will say so, but it cannot read what it cannot reach.
 
 Or link a real `kuang` binary onto your PATH:
 

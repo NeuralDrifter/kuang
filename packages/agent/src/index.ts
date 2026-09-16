@@ -32,6 +32,7 @@ import {
 } from "./core/session.ts";
 import { forgetVault, hasVault, loadVault, saveVault } from "./core/redact/vault-file.ts";
 import { MutableOutput, passphraseAsker, type PassphraseAsker } from "./core/secret-prompt.ts";
+import { describeProject, projectPrompt } from "./core/project.ts";
 import { handleSlash } from "./core/slash.ts";
 import { ask, type Question } from "./ui/ink/pending.ts";
 import { bailianTools } from "./core/tools/bailian.ts";
@@ -277,8 +278,14 @@ async function buildSession(
 ): Promise<Session> {
   const language = ctx.settings.language;
   const resumed = sessionToResume(cwd, options);
+
+  // Where the agent is standing, and what the project says about itself.
+  // Without it the model describes whatever `glob` returned as "the project",
+  // which is wrong whenever the answer was "a subdirectory of something
+  // larger" — in a monorepo, most of the time.
+  const project = projectPrompt(describeProject(cwd));
   const opening: AgentMessage[] = resumed?.messages ?? [
-    { role: "system", content: localize(SYSTEM_PROMPT, language) },
+    { role: "system", content: `${localize(SYSTEM_PROMPT, language)}\n\n${project}` },
   ];
 
   return {
