@@ -21,14 +21,23 @@
 // makes the file correct under both, rather than under whichever was guessed.
 import React from "react";
 import type { CommandContext } from "bailian-cli-core";
-import { Box, render, Static, Text, useApp, useInput, useStdout } from "ink";
+import { Box, render, Static, Text, useApp, useBoxMetrics, useInput, useStdout } from "ink";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentEvent } from "../../core/events.ts";
 import type { PlatformAccess } from "../../core/platform.ts";
 import type { ApprovalDecision } from "../../core/approvals.ts";
 import type { AgentOptions, InkWiring } from "../../index.ts";
 import type { Question } from "./pending.ts";
-import { Approval, Line, Status } from "./components.tsx";
+import { Approval, Line, Pane as PaneView, Status } from "./components.tsx";
+import { MOUSE_OFF, MOUSE_ON, paneForColumn, parseMouseEvents, wheelDelta } from "./mouse.ts";
+import {
+  clampScroll,
+  maxScroll,
+  scrollTopForTrackRow,
+  type Pane,
+  type ScrollGeometry,
+} from "./scroll.ts";
+import { useLineEditor } from "./use-line-editor.ts";
 import {
   emptyTranscript,
   reduce,
@@ -37,7 +46,27 @@ import {
   type TranscriptState,
 } from "./transcript.ts";
 
-function App({
+/**
+ * A scroll position larger than any transcript.
+ *
+ * Clamping turns it into "the last screenful" on every render, so a pane that
+ * has not been scrolled follows new output down while one that has been
+ * scrolled up stays where it was put.
+ */
+const AT_BOTTOM = Number.MAX_SAFE_INTEGER;
+
+/**
+ * The screen row the panes start on, counted from 1 as mouse reports are.
+ *
+ * The root box fills the terminal in this layout, so they start at the very
+ * top. Named rather than buried in a `- 1`, because it is an assumption about
+ * what is drawn above the panes, and if a header ever appears this is the one
+ * number that has to change. A bare subtraction would not have said so, and a
+ * drag would quietly have landed a row out.
+ */
+const PANES_TOP_ROW = 1;
+
+export function App({
   session,
   onSubmit,
   onCommand,
@@ -47,11 +76,7 @@ function App({
   doForgetSecrets,
 }: InkWiring): React.ReactElement {
   const [state, setState] = useState<TranscriptState>(emptyTranscript);
-  const [draft, setDraft] = useState("");
-  const [cursor, setCursor] = useState(0);
-  const [history, setHistory] = useState<string[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(0);
-  const [historyDraft, setHistoryDraft] = useState("");
+  const line = useLineEditor();
   const [pending, setPending] = useState<Question<ApprovalDecision> | undefined>();
   const [pendingPassphrase, setPendingPassphrase] = useState<
     Question<string | undefined> | undefined
@@ -101,20 +126,22 @@ function App({
 
   const submit = useCallback(
     (text: string) => {
-      const trimmed = text.trim();
-      if (trimmed === "/panes") {
-        setLayout((l) => (l === "flow" ? "panes" : "flow"));
-        setState((current) =>
-          withNotice(current, `Switched to ${layout === "flow" ? "panes" : "flow"} layout.`),
-        );
-        return;
-      }
-
       // A slash command is the user talking to the program, so it runs now
       // whether or not a turn is in flight, and never reaches the model.
+      //
+      // `/panes` goes through here like everything else rather than being
+      // caught above. Intercepting it meant `handleSlash` never saw it, so
+      // `/help` — the one place a user looks — could not list it.
       const handled = onCommand(text);
       if (handled) {
         if (handled.text) setState((current) => withNotice(current, handled.text!));
+        if (handled.layout) {
+          setLayout((current) => {
+            const next = current === "flow" ? "panes" : "flow";
+            setState((s) => withNotice(s, `Switched to ${next} layout.`));
+            return next;
+          });
+        }
         if (handled.secrets === "save") {
           void doSaveSecrets(askPassphrase, (msg) => setState((c) => withNotice(c, msg)));
         } else if (handled.secrets === "forget") {
@@ -131,7 +158,7 @@ function App({
         busy.current = false;
       });
     },
-    [emit, exit, onCommand, onSubmit, doSaveSecrets, doForgetSecrets, askPassphrase, layout],
+    [emit, exit, onCommand, onSubmit, doSaveSecrets, doForgetSecrets, askPassphrase],
   );
 
   // While a question is up, every keystroke means an answer to it, so the
@@ -149,76 +176,34 @@ function App({
 
   useInput(
     (input, key) => {
+      // A hooked mouse reports through the same channel as the keyboard, so
+      // its escape sequences arrive here looking like typing. They are not,
+      // and letting them reach the draft fills the prompt with `[<64;25;10M`.
+      if (mouseHooked && parseMouseEvents(input).length > 0) return;
+
       if (key.return) {
-        const text = draft.trim();
-        setDraft("");
-        setCursor(0);
+        // Trimmed here and not in `take`: the prompt forgives a stray space,
+        // the passphrase field must not.
+        const text = line.take().trim();
         if (text) {
-          setHistory((h) => {
-            const next = [...h, text];
-            setHistoryIndex(next.length);
-            return next;
-          });
-          setHistoryDraft("");
+          line.remember(text);
           submit(text);
         }
         return;
       }
       if (key.upArrow) {
-        if (history.length > 0 && historyIndex > 0) {
-          if (historyIndex === history.length) setHistoryDraft(draft);
-          const nextIndex = historyIndex - 1;
-          setHistoryIndex(nextIndex);
-          setDraft(history[nextIndex]);
-          setCursor(history[nextIndex].length);
-        }
+        line.older();
         return;
       }
       if (key.downArrow) {
-        if (historyIndex < history.length) {
-          const nextIndex = historyIndex + 1;
-          setHistoryIndex(nextIndex);
-          if (nextIndex === history.length) {
-            setDraft(historyDraft);
-            setCursor(historyDraft.length);
-          } else {
-            setDraft(history[nextIndex]);
-            setCursor(history[nextIndex].length);
-          }
-        }
-        return;
-      }
-      if (key.leftArrow) {
-        setCursor((c) => Math.max(0, c - 1));
-        return;
-      }
-      if (key.rightArrow) {
-        setCursor((c) => Math.min(draft.length, c + 1));
-        return;
-      }
-      if (key.backspace) {
-        if (cursor > 0) {
-          setDraft((d) => d.slice(0, cursor - 1) + d.slice(cursor));
-          setCursor((c) => c - 1);
-        }
-        return;
-      }
-      if (key.delete) {
-        if (cursor < draft.length) {
-          setDraft((d) => d.slice(0, cursor) + d.slice(cursor + 1));
-        }
+        line.newer();
         return;
       }
       if (key.ctrl && input === "c") {
         exit();
         return;
       }
-      // Ink hands a paste over as one `input` string, so this appends the whole
-      // block rather than a character — which is what keeps paste intact.
-      if (input && !key.ctrl && !key.meta) {
-        setDraft((d) => d.slice(0, cursor) + input + d.slice(cursor));
-        setCursor((c) => c + input.length);
-      }
+      line.edit(input, key);
     },
     { isActive: pending === undefined && pendingPassphrase === undefined },
   );
@@ -226,66 +211,159 @@ function App({
   useInput(
     (input, key) => {
       if (key.return) {
-        pendingPassphrase?.answer(draft);
-        setDraft("");
-        setCursor(0);
+        pendingPassphrase?.answer(line.take());
         return;
       }
       if (key.escape || (key.ctrl && input === "c")) {
+        line.take();
         pendingPassphrase?.answer(undefined);
-        setDraft("");
-        setCursor(0);
         return;
       }
-      if (key.backspace) {
-        if (cursor > 0) {
-          setDraft((d) => d.slice(0, cursor - 1) + d.slice(cursor));
-          setCursor((c) => c - 1);
-        }
-        return;
-      }
-      if (key.delete) {
-        if (cursor < draft.length) {
-          setDraft((d) => d.slice(0, cursor) + d.slice(cursor + 1));
-        }
-        return;
-      }
-      if (key.leftArrow) setCursor((c) => Math.max(0, c - 1));
-      if (key.rightArrow) setCursor((c) => Math.min(draft.length, c + 1));
-
-      if (input && !key.ctrl && !key.meta) {
-        setDraft((d) => d.slice(0, cursor) + input + d.slice(cursor));
-        setCursor((c) => c + input.length);
-      }
+      line.edit(input, key);
     },
     { isActive: pendingPassphrase !== undefined },
   );
 
   const { stdout } = useStdout();
   const [rows, setRows] = useState(stdout.rows || 24);
-  const [scrollOffset, setScrollOffset] = useState(0);
+  const [columns, setColumns] = useState(stdout.columns || 80);
 
   useEffect(() => {
-    const onResize = () => setRows(stdout.rows);
+    const onResize = () => {
+      setRows(stdout.rows);
+      setColumns(stdout.columns);
+    };
     stdout.on("resize", onResize);
     return () => {
       stdout.off("resize", onResize);
     };
   }, [stdout]);
 
-  useInput(
-    (input, key) => {
-      if (key.pageUp) setScrollOffset((o) => o + 5);
-      if (key.pageDown) setScrollOffset((o) => Math.max(0, o - 5));
-    },
-    { isActive: layout === "panes" && pending === undefined && pendingPassphrase === undefined },
-  );
+  // Each pane scrolls on its own: they hold different amounts, so one shared
+  // offset moved them by different fractions and they drifted apart.
+  const [scroll, setScroll] = useState<Record<Pane, number>>({
+    conversation: AT_BOTTOM,
+    tools: AT_BOTTOM,
+  });
+  const [focused, setFocused] = useState<Pane>("conversation");
+  const [mouseHooked, setMouseHooked] = useState(false);
+  const [dragging, setDragging] = useState<Pane | undefined>();
+
+  const viewportRef = useRef(null);
+  const convRef = useRef(null);
+  const toolRef = useRef(null);
+  const viewportBox = useBoxMetrics(viewportRef);
+  const convBox = useBoxMetrics(convRef);
+  const toolBox = useBoxMetrics(toolRef);
 
   const conversation = state.done.filter((e) => e.kind !== "tool");
   const tools = state.done.filter((e) => e.kind === "tool");
 
-  const visibleConv = conversation.slice(0, conversation.length - scrollOffset);
-  const visibleTools = tools.slice(0, tools.length - scrollOffset);
+  const viewportRows = Math.max(1, viewportBox.height);
+  const contentRows: Record<Pane, number> = {
+    conversation: convBox.height,
+    tools: toolBox.height,
+  };
+
+  // Clamped here rather than where it is set: the maximum shrinks when the
+  // terminal grows, and a position from before would point past the end.
+  const scrollTop: Record<Pane, number> = {
+    conversation: clampScroll(scroll.conversation, contentRows.conversation, viewportRows),
+    tools: clampScroll(scroll.tools, contentRows.tools, viewportRows),
+  };
+
+  /** Everything a pane needs to draw and place its scrollbar. */
+  const geometryFor = (pane: Pane): ScrollGeometry => ({
+    contentRows: contentRows[pane],
+    viewportRows,
+    scrollTop: scrollTop[pane],
+    trackRows: viewportRows,
+  });
+
+  /**
+   * Put one pane at `next`, or back on the bottom when that is where it
+   * lands, so a pane the user has not scrolled keeps following new output.
+   */
+  function moveTo(pane: Pane, next: number): void {
+    const bottom = maxScroll(contentRows[pane], viewportRows);
+    setScroll((current) => ({ ...current, [pane]: next >= bottom ? AT_BOTTOM : next }));
+  }
+
+  function scrollBy(pane: Pane, delta: number): void {
+    moveTo(pane, clampScroll(scrollTop[pane] + delta, contentRows[pane], viewportRows));
+  }
+
+  /** Follow a grab on the scrollbar, `trackRow` counted from the track's top. */
+  function scrollToTrackRow(pane: Pane, trackRow: number): void {
+    moveTo(pane, scrollTopForTrackRow(trackRow, viewportRows, contentRows[pane], viewportRows));
+  }
+
+  // The split is the last column of the left pane; each pane's scrollbar is
+  // its own last column. Derived rather than measured, because useBoxMetrics
+  // reports positions relative to a parent and mouse reports are absolute.
+  const splitColumn = Math.floor(columns / 2);
+  const scrollbarPaneAt = (column: number): Pane | undefined => {
+    if (column === splitColumn) return "conversation";
+    if (column === columns) return "tools";
+    return undefined;
+  };
+
+  const panesLive = layout === "panes" && pending === undefined && pendingPassphrase === undefined;
+
+  useEffect(() => {
+    if (!mouseHooked || layout !== "panes") return;
+    stdout.write(MOUSE_ON);
+    const release = () => stdout.write(MOUSE_OFF);
+    // React's cleanup covers unmount and toggle. The exit hooks cover the ways
+    // a process ends without unmounting — otherwise the terminal keeps
+    // reporting into whatever the user runs next.
+    process.on("exit", release);
+    return () => {
+      release();
+      process.off("exit", release);
+    };
+  }, [mouseHooked, layout, stdout]);
+
+  useInput(
+    (input, key) => {
+      if (key.tab) {
+        setFocused((pane) => (pane === "conversation" ? "tools" : "conversation"));
+        return;
+      }
+      if (key.ctrl && input === "o") {
+        setMouseHooked((on) => !on);
+        return;
+      }
+      // A screenful less one row, so a line stays on screen to read against.
+      const page = Math.max(1, viewportRows - 1);
+      if (key.pageUp) scrollBy(focused, -page);
+      if (key.pageDown) scrollBy(focused, page);
+    },
+    { isActive: panesLive },
+  );
+
+  useInput(
+    (input) => {
+      for (const event of parseMouseEvents(input)) {
+        const delta = wheelDelta(event.button);
+        if (delta !== undefined) {
+          scrollBy(paneForColumn(event.column, splitColumn), delta);
+          continue;
+        }
+        if (!event.pressed) {
+          setDragging(undefined);
+          continue;
+        }
+        // Once a drag starts the pointer owns that scrollbar, even when it
+        // wanders off the column.
+        const pane = dragging ?? scrollbarPaneAt(event.column);
+        if (!pane) continue;
+        setDragging(pane);
+        scrollToTrackRow(pane, event.row - PANES_TOP_ROW);
+      }
+    },
+    { isActive: mouseHooked && panesLive },
+  );
 
   const inputBlock = (
     <Box
@@ -305,9 +383,9 @@ function App({
           </Text>
           <Text color="cyan"> {">"} </Text>
           <Text>
-            {"*".repeat(cursor)}
-            <Text inverse>{cursor < draft.length ? "*" : " "}</Text>
-            {"*".repeat(Math.max(0, draft.length - cursor - 1))}
+            {"*".repeat(line.cursor)}
+            <Text inverse>{line.cursor < line.text.length ? "*" : " "}</Text>
+            {"*".repeat(Math.max(0, line.text.length - line.cursor - 1))}
           </Text>
         </Box>
       ) : (
@@ -317,9 +395,9 @@ function App({
           </Box>
           <Box flexShrink={1}>
             <Text>
-              {draft.slice(0, cursor)}
-              <Text inverse>{draft[cursor] || " "}</Text>
-              {draft.slice(cursor + 1)}
+              {line.text.slice(0, line.cursor)}
+              <Text inverse>{line.text[line.cursor] || " "}</Text>
+              {line.text.slice(line.cursor + 1)}
             </Text>
           </Box>
         </Box>
@@ -343,41 +421,36 @@ function App({
 
   return (
     <Box height={rows} flexDirection="column" width="100%">
-      <Box flexGrow={1} flexDirection="row" overflow="hidden">
-        <Box
-          width="50%"
-          flexDirection="column"
-          justifyContent="flex-end"
-          borderStyle="single"
-          borderLeft={false}
-          borderTop={false}
-          borderBottom={false}
-          paddingRight={1}
+      <Box ref={viewportRef} flexGrow={1} flexDirection="row" overflowY="hidden">
+        <PaneView
+          contentRef={convRef}
+          entries={conversation}
+          geometry={geometryFor("conversation")}
+          focused={focused === "conversation"}
         >
-          {visibleConv.map((entry) => (
-            <Box key={entry.id} flexShrink={0} flexDirection="column">
-              <Line entry={entry} />
-            </Box>
-          ))}
-          {state.streaming && scrollOffset === 0 ? (
+          {state.streaming ? (
             <Box flexShrink={0} marginTop={1}>
               <Text>⡇ {state.streaming}</Text>
             </Box>
           ) : null}
-        </Box>
+        </PaneView>
 
-        <Box width="50%" flexDirection="column" justifyContent="flex-end" paddingLeft={1}>
-          {visibleTools.map((entry) => (
-            <Box key={entry.id} flexShrink={0} flexDirection="column">
-              <Line entry={entry} />
-            </Box>
-          ))}
-        </Box>
+        <PaneView
+          contentRef={toolRef}
+          entries={tools}
+          geometry={geometryFor("tools")}
+          focused={focused === "tools"}
+          divider
+        />
       </Box>
 
       {inputBlock}
 
-      <Status state={state} session={session} />
+      <Status
+        state={state}
+        session={session}
+        hint={`tab: ${focused} · ctrl+o: mouse ${mouseHooked ? "on" : "off"}`}
+      />
     </Box>
   );
 }

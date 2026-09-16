@@ -19,7 +19,7 @@ import React from "react";
 import { expect, test } from "vite-plus/test";
 import { render } from "ink";
 import { Writable } from "node:stream";
-import { Approval, Line, Status } from "../src/ui/ink/components.tsx";
+import { Approval, Line, Scrollbar, Status } from "../src/ui/ink/components.tsx";
 import { ask } from "../src/ui/ink/pending.ts";
 import { emptyTranscript, type Entry } from "../src/ui/ink/transcript.ts";
 import type { ApprovalDecision } from "../src/core/approvals.ts";
@@ -135,4 +135,84 @@ test("a turn in flight says so", async () => {
     />,
   );
   expect(screen).toContain("working");
+});
+
+test("the status line offers no key it does not listen for", async () => {
+  // It used to advertise "esc to cancel" at all times, but nothing outside
+  // the approval and passphrase prompts handles escape, and there is no way
+  // to cancel a turn in flight at all.
+  const screen = await draw(
+    <Status state={emptyTranscript()} session={{ id: "s1", model: "m", redacting: false }} />,
+  );
+  expect(screen).not.toContain("esc");
+});
+
+test("the status line shows the hint it is given", async () => {
+  const screen = await draw(
+    <Status
+      state={emptyTranscript()}
+      session={{ id: "s1", model: "m", redacting: false }}
+      hint="ctrl+o: mouse off"
+    />,
+  );
+  expect(screen).toContain("ctrl+o: mouse off");
+});
+
+/** The scrollbar column, read back as one entry per row, colour removed. */
+function bar(screen: string): string[] {
+  const colour = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+  return screen
+    .split("\n")
+    .map((line) => line.replace(colour, "").trim())
+    .filter((line) => line.length > 0);
+}
+
+test("the thumb covers the share of the track that is on screen", async () => {
+  const screen = await draw(
+    <Scrollbar
+      geometry={{ contentRows: 20, viewportRows: 10, scrollTop: 0, trackRows: 4 }}
+      focused
+    />,
+  );
+  expect(bar(screen)).toEqual(["█", "█", "░", "░"]);
+});
+
+test("scrolling moves the thumb down the track", async () => {
+  const screen = await draw(
+    <Scrollbar
+      geometry={{ contentRows: 20, viewportRows: 10, scrollTop: 10, trackRows: 4 }}
+      focused
+    />,
+  );
+  expect(bar(screen)).toEqual(["░", "░", "█", "█"]);
+});
+
+test("the focused pane's thumb is drawn differently from the idle one", async () => {
+  // Tab moves focus and the paging keys follow it, so which pane has focus
+  // has to be readable without consulting the status line. Marked by shape
+  // rather than colour: colour is lost down a pipe, absent for anyone who
+  // cannot distinguish it, and — as this very helper shows — not there to
+  // assert on either.
+  const focused = await draw(
+    <Scrollbar
+      geometry={{ contentRows: 20, viewportRows: 10, scrollTop: 0, trackRows: 4 }}
+      focused
+    />,
+  );
+  const idle = await draw(
+    <Scrollbar geometry={{ contentRows: 20, viewportRows: 10, scrollTop: 0, trackRows: 4 }} />,
+  );
+
+  expect(bar(focused)).toEqual(["█", "█", "░", "░"]);
+  expect(bar(idle)).toEqual(["▒", "▒", "░", "░"]);
+});
+
+test("content that fits leaves the track solid", async () => {
+  const screen = await draw(
+    <Scrollbar
+      geometry={{ contentRows: 3, viewportRows: 10, scrollTop: 0, trackRows: 3 }}
+      focused
+    />,
+  );
+  expect(bar(screen)).toEqual(["█", "█", "█"]);
 });

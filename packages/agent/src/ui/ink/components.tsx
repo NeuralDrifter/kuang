@@ -17,10 +17,115 @@
 // classic transform — which emits `React.createElement`. Importing React
 // makes the file correct under both, rather than under whichever was guessed.
 import React from "react";
-import { Box, Text } from "ink";
+import { Box, Text, type DOMElement } from "ink";
 import type { ApprovalDecision } from "../../core/approvals.ts";
 import type { Entry, TranscriptState } from "./transcript.ts";
 import type { Question } from "./pending.ts";
+import { thumb, type ScrollGeometry } from "./scroll.ts";
+
+/** The unscrolled part of the track. */
+const TRACK = "░";
+/** The visible window, in the pane the paging keys are pointed at. */
+const THUMB_FOCUSED = "█";
+/** The same window in the other pane. Shape, not colour, so it survives a pipe. */
+const THUMB_IDLE = "▒";
+
+/**
+ * A pane's scrollbar: one column, a thumb against a dotted track.
+ *
+ * Takes the measured geometry rather than the entries, so the thumb is a
+ * picture of rendered rows and not of how many entries happen to be in the
+ * list — those differ whenever a reply wraps.
+ */
+export function Scrollbar({
+  geometry,
+  focused = false,
+}: {
+  geometry: ScrollGeometry;
+  /** Whether this pane takes the paging keys, shown so it need not be guessed. */
+  focused?: boolean;
+}): React.ReactElement {
+  const { trackRows } = geometry;
+  const { start, size } = thumb(geometry);
+
+  // Decided once rather than per row, and named, because the glyphs are the
+  // component's whole meaning: solid says "this pane takes the paging keys".
+  const thumbGlyph = focused ? THUMB_FOCUSED : THUMB_IDLE;
+
+  return (
+    <Box flexDirection="column" width={1} flexShrink={0}>
+      {Array.from({ length: trackRows }, (_, row) => {
+        const onThumb = row >= start && row < start + size;
+        return (
+          <Text key={row} dimColor={!onThumb} color={focused && onThumb ? "cyan" : undefined}>
+            {onThumb ? thumbGlyph : TRACK}
+          </Text>
+        );
+      })}
+    </Box>
+  );
+}
+
+/**
+ * One column of the split layout: a clipped viewport over its entries, with
+ * its own scrollbar.
+ *
+ * Both panes were written out longhand and differed only in which entries
+ * they held and which side they padded — so a fix to one drifted from the
+ * other, and a third panel meant a third copy.
+ *
+ * `divider` draws the rule between the panes. A boolean prop rather than two
+ * components because it is a style switch in Ink's own idiom, alongside
+ * `borderTop` and `borderRight`, and it changes nothing about what the
+ * component does.
+ */
+export function Pane({
+  contentRef,
+  entries,
+  geometry,
+  focused,
+  divider = false,
+  children,
+}: {
+  contentRef: React.RefObject<DOMElement | null>;
+  entries: Entry[];
+  geometry: ScrollGeometry;
+  focused: boolean;
+  divider?: boolean;
+  children?: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <Box width="50%" flexDirection="row">
+      <Box
+        flexGrow={1}
+        flexDirection="column"
+        overflowY="hidden"
+        paddingX={1}
+        borderStyle={divider ? "single" : undefined}
+        borderRight={false}
+        borderTop={false}
+        borderBottom={false}
+        borderColor="gray"
+      >
+        {/*
+          flexShrink={0} keeps the content at its natural height so it can
+          overflow and be scrolled; without it Yoga squeezes it into the
+          viewport and there is nothing left to move. The negative margin is
+          the scroll: the parent clips, this slides under the clip.
+        */}
+        <Box ref={contentRef} flexDirection="column" flexShrink={0} marginTop={-geometry.scrollTop}>
+          {entries.map((entry) => (
+            <Box key={entry.id} flexShrink={0} flexDirection="column">
+              <Line entry={entry} />
+            </Box>
+          ))}
+          {children}
+        </Box>
+      </Box>
+      <Scrollbar geometry={geometry} focused={focused} />
+    </Box>
+  );
+}
 
 /** What the status line needs, without handing it the whole session. */
 export interface StatusInfo {
@@ -38,9 +143,14 @@ const COLOUR: Record<Entry["kind"], string> = {
   error: "red",
 };
 
-const MARKER: Record<Entry["kind"], string> = {
+/**
+ * A marker per kind of line. No entry for `reply`: the model's own text is
+ * the body of the transcript rather than an annotation on it, and `Line`
+ * returns before reaching here. Typed to exclude it so it cannot be added
+ * back and sit unread.
+ */
+const MARKER: Record<Exclude<Entry["kind"], "reply">, string> = {
   user: "❯",
-  reply: " ",
   tool: "⚙",
   notice: "💡",
   error: "✖",
@@ -70,16 +180,24 @@ export function Line({ entry }: { entry: Entry }): React.ReactElement {
 export function Status({
   state,
   session,
+  hint,
 }: {
   state: TranscriptState;
   session: StatusInfo;
+  /**
+   * Keys the current layout actually listens for.
+   *
+   * Left empty rather than filled with something plausible: this used to
+   * advertise "esc to cancel" unconditionally, while escape was only handled
+   * inside the approval and passphrase prompts and a turn in flight could not
+   * be cancelled at all.
+   */
+  hint?: string;
 }): React.ReactElement {
   const total = state.tokens.prompt + state.tokens.completion;
   return (
     <Box justifyContent="space-between" width="100%">
-      <Box>
-        <Text dimColor>esc to cancel</Text>
-      </Box>
+      <Box>{hint ? <Text dimColor>{hint}</Text> : null}</Box>
       <Box>
         <Text dimColor>
           {session.model} · {session.redacting ? "redacting" : "no redaction"} ·{" "}
