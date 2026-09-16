@@ -109,6 +109,9 @@ test("a very long brief is truncated and says so", () => {
   expect(context.brief!.truncated).toBe(true);
   expect(context.brief!.text.length).toBeLessThan(20000);
   expect(projectPrompt(context)).toContain("truncated");
+  // Marked where the cut happens, not only in the heading thousands of
+  // characters earlier — otherwise the text simply stops mid-sentence.
+  expect(context.brief!.text.trimEnd().endsWith("[…truncated]")).toBe(true);
 });
 
 test("no brief is not a problem", () => {

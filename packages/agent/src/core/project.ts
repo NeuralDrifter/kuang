@@ -66,8 +66,17 @@ function findBrief(root: string, repoRoot?: string): ProjectContext["brief"] {
       try {
         if (!statSync(path).isFile()) continue;
         const full = readFileSync(path, "utf-8");
-        const truncated = full.length > MAX_CONTEXT_BYTES;
-        return { path, text: truncated ? full.slice(0, MAX_CONTEXT_BYTES) : full, truncated };
+        if (full.length <= MAX_CONTEXT_BYTES) return { path, text: full, truncated: false };
+
+        // Mark the cut where it happens, not only in the heading above. A
+        // reader reaching the end otherwise finds a sentence stopping in the
+        // middle with nothing to say why, thousands of characters after the
+        // notice that it would.
+        return {
+          path,
+          text: `${full.slice(0, MAX_CONTEXT_BYTES)}\n\n[…truncated]`,
+          truncated: true,
+        };
       } catch {
         // Unreadable is the same as absent: a brief is a courtesy, never a
         // reason to refuse to start.
