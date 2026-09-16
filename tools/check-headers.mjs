@@ -17,23 +17,39 @@ export function hasValidHeader(source) {
   return head.includes("SPDX-License-Identifier: Apache-2.0");
 }
 
+/**
+ * Inherited files this fork has modified. §4(b) attaches to these by name,
+ * because the obligation follows the edit rather than the directory.
+ */
+const MODIFIED_UPSTREAM_FILES = [
+  "packages/commands/src/commands/agent/index.ts",
+  "packages/commands/src/index.ts",
+  "packages/commands/tests/sandbox.test.ts",
+  "packages/core/src/config/loader.ts",
+  "packages/core/src/config/schema.ts",
+  "packages/core/tests/image-input.test.ts",
+  "packages/core/tests/index.test.ts",
+  "packages/core/tests/mcp.test.ts",
+];
+
+/**
+ * Files this fork wrote outright under a directory it shares with upstream.
+ *
+ * Listed rather than matched by prefix: `tools/` is upstream's directory too,
+ * and claiming all of it demanded a copyright line on twenty files this fork
+ * did not write. That went unnoticed until upstream added two new ones and the
+ * merge could not be committed — the hook only ever sees staged files, so an
+ * inherited file had never been put in front of it before.
+ */
+const OWN_FILES = ["tools/check-headers.mjs", "tools/tests/check-headers.test.mjs"];
+
 /** Files the rule applies to. Generated output and vendored code are exempt. */
 export function isCovered(path) {
   const p = path.replaceAll("\\", "/");
   if (!/\.(ts|mts|cts|tsx|js|mjs|cjs|jsx)$/.test(p)) return false;
   if (p.includes("/node_modules/") || p.includes("/dist/")) return false;
-  if (p.startsWith("packages/agent/") || p.startsWith("tools/")) return true;
-  const explicit = [
-    "packages/commands/src/commands/agent/index.ts",
-    "packages/commands/src/index.ts",
-    "packages/commands/tests/sandbox.test.ts",
-    "packages/core/src/config/loader.ts",
-    "packages/core/src/config/schema.ts",
-    "packages/core/tests/image-input.test.ts",
-    "packages/core/tests/index.test.ts",
-    "packages/core/tests/mcp.test.ts",
-  ];
-  return explicit.includes(p);
+  if (p.startsWith("packages/agent/")) return true;
+  return OWN_FILES.includes(p) || MODIFIED_UPSTREAM_FILES.includes(p);
 }
 
 import { readFileSync } from "node:fs";
