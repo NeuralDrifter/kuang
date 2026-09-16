@@ -240,3 +240,15 @@ test("in-memory is what the status reports when nothing says otherwise", () => {
   // The default matters: it is the promise the rest of the design rests on.
   expect(say("/pii")).toContain("lost when you exit");
 });
+
+test("/panes is listed in the help, like every other command", () => {
+  // It used to be intercepted by the Ink renderer before `handleSlash` ever
+  // saw it, so the one place a user looks for commands never mentioned it.
+  const help = handleSlash("/help", ctx());
+  expect(help.kind).toBe("handled");
+  expect(help.kind === "handled" && help.text).toContain("/panes");
+});
+
+test("/panes asks the renderer to change layout", () => {
+  expect(handleSlash("/panes", ctx())).toEqual({ kind: "layout" });
+});

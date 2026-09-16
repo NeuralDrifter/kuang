@@ -33,7 +33,13 @@ export type SlashOutcome =
    * saving needs a passphrase, prompting for one is terminal work, and `core/`
    * does not own a terminal.
    */
-  | { kind: "secrets"; action: "save" | "forget" };
+  | { kind: "secrets"; action: "save" | "forget" }
+  /**
+   * Switch between the flowing transcript and the split panes. Returned
+   * rather than done here for the same reason as `secrets`: which layouts
+   * exist is a question about the renderer, and `core/` does not own one.
+   */
+  | { kind: "layout" };
 
 export interface SlashContext {
   language: Language;
@@ -235,6 +241,14 @@ const COMMANDS: SlashCommand[] = [
     names: ["sessions", "会话"],
     summary: { "en-US": "List saved conversations", "zh-CN": "列出已保存的会话" },
     run: (_args, ctx) => ({ kind: "handled", text: sessionList(ctx) }),
+  },
+  {
+    names: ["panes", "分栏"],
+    summary: {
+      "en-US": "Split the screen into conversation and tool calls",
+      "zh-CN": "将界面分为对话与工具调用两栏",
+    },
+    run: () => ({ kind: "layout" }),
   },
   {
     names: ["exit", "退出", "quit"],

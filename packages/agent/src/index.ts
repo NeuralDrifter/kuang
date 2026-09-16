@@ -209,6 +209,17 @@ const SECRETS_AFTER_TURN: LocalizedText = {
   "zh-CN": "本轮结束后将询问口令。",
 };
 
+/**
+ * `/panes` is listed by `/help` in both renderers, because the command table
+ * lives in `core/` and knows nothing about which one is drawing. The plain
+ * renderer prints a line at a time and has nowhere to put a second column, so
+ * it says so rather than accepting the command and doing nothing.
+ */
+const PANES_NEEDS_INK: LocalizedText = {
+  "en-US": "Panes need the full-screen UI, which runs when stdin and stdout are both terminals.",
+  "zh-CN": "分栏需要全屏界面，仅当标准输入与标准输出均为终端时可用。",
+};
+
 const NO_SESSION: LocalizedText = {
   "en-US": "No session to resume in this project. Starting a new one.",
   "zh-CN": "本项目没有可恢复的会话，将开始新会话。",
@@ -387,6 +398,9 @@ function interceptCommand(
     case "secrets":
       deferred.secrets = outcome.action;
       write(localize(SECRETS_AFTER_TURN, session.language) + "\n");
+      return true;
+    case "layout":
+      write(localize(PANES_NEEDS_INK, session.language) + "\n");
       return true;
   }
 }
@@ -626,7 +640,7 @@ export interface InkWiring {
   /** Handle a slash command, or return undefined when it is a prompt. */
   onCommand: (
     input: string,
-  ) => { text?: string; exit?: boolean; secrets?: "save" | "forget" } | undefined;
+  ) => { text?: string; exit?: boolean; secrets?: "save" | "forget"; layout?: boolean } | undefined;
   /**
    * Register what to do when the loop needs consent. The handler is given the
    * question to draw; answering it resolves what the loop is parked on.
@@ -691,7 +705,9 @@ export async function buildInkSession(
 
   const onCommand = (
     input: string,
-  ): { text?: string; exit?: boolean; secrets?: "save" | "forget" } | undefined => {
+  ):
+    | { text?: string; exit?: boolean; secrets?: "save" | "forget"; layout?: boolean }
+    | undefined => {
     const outcome = handleSlash(input.trim(), {
       language: session.language,
       vault: session.vault,
@@ -709,6 +725,8 @@ export async function buildInkSession(
         return { exit: true };
       case "secrets":
         return { text: localize(SECRETS_AFTER_TURN, session.language), secrets: outcome.action };
+      case "layout":
+        return { layout: true };
     }
   };
 
