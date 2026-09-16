@@ -29,35 +29,7 @@ recorded under §6 rather than here.
 
 ## 2. Correctness
 
-### 2.1 `~` is not treated as shell chaining
-
-**Where:** `approvals.ts`, `SHELL_CHAINING`
-
-The regex catches `;`, `&`, `|`, backticks, `$`, braces, redirects and newlines,
-but not `~`. Harmless in the cases tested so far only because of where the
-tilde happens to sit, not by design.
-
-### 2.2 Backslashes in POSIX filenames are reinterpreted
-
-**Where:** `approvals.ts`, `normalizePath`
-
-Backslashes are normalised to `/` so Windows paths match POSIX-style rules. On
-POSIX a backslash is a **legal filename character**, so a file genuinely named
-`a\b.ts` is treated as `a/b.ts`. Fails closed (re-prompts), so it is a
-usability wart rather than a hole.
-
-### 2.3 write_file and edit_file do not check the secret list
-
-**Where:** `packages/agent/src/core/tools/fs.ts`
-
-Only `read_file` consults `isSecretFile`. The agent can therefore overwrite
-`.env` or an ssh key. Both are `ask`-tier so nothing happens without approval,
-and writing to `.env` is sometimes legitimate — but the diff preview shows the
-file being clobbered without flagging what it is.
-
-**Fix:** keep the write allowed, but mark it in the preview.
-
-### 2.4 CN_MOBILE has no checksum to lean on
+### 2.1 CN_MOBILE has no checksum to lean on
 
 **Where:** `packages/agent/src/core/redact/rules.ts`
 
@@ -71,17 +43,6 @@ that corpus is TypeScript.
 `160`/`161`/`163`, `179`, `192`/`194` are not issued — which costs no recall and
 removes roughly a fifth of the space. Requiring separators is _not_ the answer
 here: Chinese mobiles are written unseparated, so it would gut recall.
-
-### 2.5 Interpreter probing accepts binaries that cannot be spawned
-
-**Where:** `packages/agent/src/core/tools/shell.ts`, `probeInterpreters`
-
-The probe checks PATH presence only. On Windows that matches `.bat` shims and
-the Store `python3` redirector stub, neither of which `execFile` can spawn
-since CVE-2024-27980. Currently harmless because `python3` is deliberately not
-probed on Windows, but the moment the probe list grows this becomes real.
-
-**Fix:** verify with an actual `--version` spawn rather than PATH presence.
 
 ---
 
@@ -245,6 +206,12 @@ Kept rather than deleted, so the record shows what went wrong and when.
 
 | Found      | Issue                                                                                                                                                                                                                                                | Fixed in  |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 2026-09-15 | `~` was not treated as shell chaining in the approval gate regex                                                                                                                                                                                     | `pending` |
+| 2026-09-15 | Backslashes in POSIX filenames were reinterpreted incorrectly in `normalizePath`                                                                                                                                                                     | `pending` |
+| 2026-09-15 | `write_file` and `edit_file` preview diffs exposed the contents of secret files being clobbered                                                                                                                                                      | `pending` |
+| 2026-09-15 | Interpreter probing used PATH presence instead of spawning, which on Windows matched unspawnable `.bat` and Store stub redirects                                                                                                                     | `pending` |
+| 2026-09-15 | The Ink UI did not support input history navigation, cursor movement, or in-line editing for the draft prompt                                                                                                                                        | `pending` |
+| 2026-09-15 | The Ink UI did not implement a passphrase prompt, rendering `--save-secrets` and `/pii save` unusable                                                                                                                                                | `pending` |
 | 2026-09-15 | JSX was transformed by whichever tsconfig the runner found, so the Ink UI worked in tests run from `packages/agent` and failed with "React is not defined" when launched from `packages/cli`                                                         | `pending` |
 | 2026-09-15 | The Ink path wired an asker that resolved to undefined, so every ask-tier tool was refused while telling the user they had denied it                                                                                                                 | `pending` |
 | 2026-09-15 | A two-word approval pattern ending in an option captured no verb, so `rm -f build/tmp.txt` approved once also authorised `rm -f -r /`; an existing test asserted this behaviour rather than catching it                                              | `pending` |
