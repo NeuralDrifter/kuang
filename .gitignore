@@ -50,9 +50,20 @@ packages/cli/scene/**/outputs/
 
 # Environment variables (sensitive data)
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+credentials.json
 
 # Local scratch / plan drafts (never commit)
 .scratch/
+all_source_code.txt
+copy_log.txt
 
 # Agent history
 .bailian-agent-history.json
@@ -65,6 +76,22 @@ packages/cli/scene/**/outputs/
 # Local assistant / editor state
 .claude/
 .gemini/
+.codex/
+.aider*/
+.aider*
+.windsurf/
+.continue/
+.opencode/
+.openclaw/
+.hermes/
+.crush/
+.roo/
+.kiro/
+.junie/
+.clinerules
+.cursorrules
+.github/copilot-instructions.md
+.mcp.json
 
 # Internal design and process notes (kept locally, not published)
 docs/superpowers/
