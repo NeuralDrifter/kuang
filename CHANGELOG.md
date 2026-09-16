@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 [中文版](CHANGELOG.zh.md) · [README](README.md) · [Contributing](CONTRIBUTING.md)
 
+## [1.25.0] - 2026-09-14
+
+### Added
+
+- **Token Plan harness quota** — `bl token-plan harness-quota` shows Token Plan harness entitlement quota usage (Console auth), joining the harness list with issued entitlements to display used/total quota, usage ratio, and reset time; harnesses with a pending entitlement are listed as issuing.
+- Filter the harness list with `--type official_tool|infrastructure`; render as a quota box or `--output json`.
+
 ## [1.24.0] - 2026-09-11
 
 ### Added

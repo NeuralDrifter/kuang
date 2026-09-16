@@ -1,6 +1,6 @@
 {
   "name": "bailian-cli",
-  "version": "1.24.0",
+  "version": "1.25.0",
   "description": "Kuang 匡 — an interactive coding and media agent for Aliyun Model Studio. Independent fork of bailian-cli.",
   "keywords": [
     "agent",
