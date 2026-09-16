@@ -33,12 +33,11 @@ const GATED_ARG: Record<string, string> = {
 };
 
 /**
- * Characters that let one shell command become two. A command containing any
- * of them is never generalised into a rule, so an approved prefix cannot be
- * used as a launch pad: `pnpm test` approved must not permit
- * `pnpm test; rm -rf ~`.
+ * Characters that let one shell command become two, or perform expansions that
+ * escape the pattern. A command containing any of them is never generalised
+ * into a rule.
  */
-const SHELL_CHAINING = /[;&|`$(){}<>\n\r]/;
+const SHELL_CHAINING = /[;&|`$(){}<>~\n\r]/;
 
 /**
  * Programs that never produce a rule, so they prompt every time.
@@ -98,7 +97,10 @@ const NEVER_GENERALISED_PREFIXES = ["mkfs"];
 
 /** Bare program name: no directory, no extension, lower-cased. */
 function programName(word: string): string {
-  const base = word.replaceAll("\\", "/").split("/").pop() ?? word;
+  const base =
+    process.platform === "win32"
+      ? (word.replaceAll("\\", "/").split("/").pop() ?? word)
+      : (word.split("/").pop() ?? word);
   return base.replace(/\.(exe|cmd|bat|com)$/i, "").toLowerCase();
 }
 
@@ -109,12 +111,12 @@ function isNeverGeneralised(word: string): boolean {
 }
 
 /**
- * Normalise a path to forward slashes and resolve `.` / `..` segments.
+ * Normalise a path to forward slashes (on Windows) and resolve `.` / `..` segments.
  * Returns undefined for an absolute path, or one that climbs out of the
  * project — neither can be expressed as a project-relative rule.
  */
 function normalizePath(raw: string): string | undefined {
-  const slashed = raw.replaceAll("\\", "/");
+  const slashed = process.platform === "win32" ? raw.replaceAll("\\", "/") : raw;
   if (slashed.startsWith("/") || /^[A-Za-z]:/.test(slashed)) return undefined;
 
   const out: string[] = [];

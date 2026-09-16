@@ -65,11 +65,12 @@ export function interpreterArgv(
   }
 }
 
-/** Whether `bin` resolves on PATH, via `where` on Windows and `which` elsewhere. */
-function onPath(bin: string): Promise<boolean> {
-  const cmd = process.platform === "win32" ? "where" : "which";
+/** Whether `interpreter` can actually be spawned and run a simple command. */
+function onPath(interpreter: Interpreter): Promise<boolean> {
+  const command = interpreter.startsWith("python") ? "print(1)" : "echo 1";
+  const { bin, args } = interpreterArgv(interpreter, command);
   return new Promise((resolve) => {
-    execFile(cmd, [bin], { windowsHide: true }, (err) => resolve(!err));
+    execFile(bin, args, { windowsHide: true }, (err) => resolve(!err));
   });
 }
 

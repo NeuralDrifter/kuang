@@ -276,6 +276,14 @@ function writeFileTool(root: string): Tool {
     preview: async (args): Promise<ToolPreview> => {
       const path = String(args.path);
       const content = String(args.content);
+
+      if (isSecretFile(path)) {
+        return {
+          summary: `write_file(${path})`,
+          diff: `[SECRET FILE] Diff hidden to prevent leaking secrets to the terminal.\nWARNING: The model is attempting to write to this file.`,
+        };
+      }
+
       const abs = resolveInProject(root, path);
       const before = await readBefore(abs);
       return {
@@ -341,7 +349,16 @@ function editFileTool(root: string): Tool {
       return `Edited ${String(args.path)}`;
     },
     preview: async (args): Promise<ToolPreview> => {
-      const { path, before, after } = await applyEdit(root, args);
+      const path = String(args.path);
+
+      if (isSecretFile(path)) {
+        return {
+          summary: `edit_file(${path})`,
+          diff: `[SECRET FILE] Diff hidden to prevent leaking secrets to the terminal.\nWARNING: The model is attempting to edit this file.`,
+        };
+      }
+
+      const { before, after } = await applyEdit(root, args);
       return {
         summary: `edit_file(${path})`,
         diff: unifiedDiff(before, after, path),
