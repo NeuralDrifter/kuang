@@ -7,7 +7,7 @@ says what it is, why it matters, and what fixing it looks like.
 fixed on the spot; move entries to _Fixed_ rather than deleting them, so the
 history of what went wrong stays readable.
 
-Last reviewed against `27608fc` on 2026-09-15. Nothing here is a surprise —
+Last reviewed against `faf7649` on 2026-09-16. Nothing here is a surprise —
 these were found during development and deliberately deferred rather than
 missed.
 
@@ -183,7 +183,31 @@ These are choices, recorded so they are not mistaken for oversights.
   derivation _and_ at matching, and the denylist and verb rule bound what can
   become a rule at all.
 
-- **The npm package is still `bailian-cli@1.24.0`.** Only the binary was renamed
+- **82 upstream tests fail on Windows, and are left alone.** `vp test` across
+  the whole repo reports 82 failures in 32 files, none of them in
+  `packages/agent` and none from our own code. Two causes, both inherited:
+  - **`os.homedir()` is read on Windows but `HOME` is what the test sets.**
+    `config-agent-writers.test.ts` and `core/tests/skills-agents.test.ts`
+    isolate the filesystem with `process.env.HOME = <tmpdir>`, and their own
+    comment says why it works — "homedir() reads $HOME on POSIX". Node reads
+    `USERPROFILE` on Windows, so the isolation does nothing and the code
+    resolves the real home. These fail on a guard in `beforeEach`, so they
+    abort before writing anything; unlike §7's `config.e2e.test.ts` entry,
+    nothing reaches the developer's home directory. Fixing it means setting
+    `USERPROFILE` alongside `HOME` in two upstream files — declined, because
+    upstream develops and runs CI on POSIX, and editing their tests widens the
+    merge surface against a repo taking ~31 commits a week for no benefit to us.
+
+  - **Some e2e tests need live credentials.** `quota.e2e.test.ts` and
+    `speech-recognize.e2e.test.ts` call the real API and fail with
+    `Workspace access denied`. Environmental, not a defect.
+
+  Verified pre-existing rather than assumed: the full suite was run at
+  `9b650078` before merging `upstream/main` and again after, and both reported
+  exactly 82 failures. **Use `vp test packages/agent` as the working signal**;
+  the repo-wide number is not expected to be zero on Windows.
+
+- **The npm package is still `bailian-cli@1.25.0`.** Only the binary was renamed
   to `kuang`. `"bailian-cli"` is the filter key in `pnpm --filter bailian-cli`,
   which the pre-commit hook runs, and it appears in the release whitelist and
   `publish.yml`; AGENTS.md §1 also requires the package versions to move in
