@@ -37,6 +37,33 @@ We are not building a platform. Five subsystems already work: skills, command
 packs, MCP, memory, and platform permissions. We are building the **host layer**
 that was always missing — UI, agent loop, local OS tools, approvals, sessions.
 
+### The operating principle
+
+Agent decisions must be **observable, auditable and reversible**, so that
+failures are caught early and understood quickly.
+
+An agent that edits files faster than anyone can read about it is only useful
+if you can trust it, and trust is not a property of the model — it is a
+property of what the interface lets you see and undo. The three words are the
+means; the last clause is the goal, and it is the one to test a design against:
+
+- **Observable** — what the agent is doing is visible while it happens, not
+  reconstructable afterwards from a log. This makes latency a requirement:
+  showing a change when the turn ends is too late, because by then five more
+  edits sit on top of the wrong one.
+- **Auditable** — what it did stays readable after the fact, in a form that
+  answers "is this right?" before it answers "what exactly happened?".
+  Legibility beats completeness; the detail belongs one scroll away rather
+  than in the way.
+- **Reversible** — a wrong change can be undone without reconstructing the
+  original by hand. This mostly costs nothing at the time, provided earlier
+  stages keep what a later one would need to restore.
+
+Approvals (§7) were the first of these, and gate what happens _before_ an
+action. The stages that follow cover what happens after one: the live diff
+panel is the observable half ([stage-6-diff-panel.md](stage-6-diff-panel.md)),
+with auditability and reversal built on the baselines it keeps.
+
 ---
 
 ## 2. Non-goals
