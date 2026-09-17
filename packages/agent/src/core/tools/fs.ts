@@ -15,6 +15,7 @@ import { readdirSync, realpathSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import type { Tool } from "./registry.ts";
 import type { ToolPreview } from "../events.ts";
+import { diffFiles } from "../diff.ts";
 
 /** Whether `target` is `root` itself or sits underneath it. */
 function contains(root: string, target: string): boolean {
@@ -82,20 +83,6 @@ function resolveInProject(root: string, path: string): string {
 /** Forward-slashed path relative to `root`, for output and matching. */
 function toRelative(root: string, absPath: string): string {
   return relative(resolve(root), absPath).replaceAll("\\", "/");
-}
-
-/** Minimal unified diff, adequate for approval previews. */
-function unifiedDiff(before: string, after: string, path: string): string {
-  const a = before.split("\n");
-  const b = after.split("\n");
-  const lines = [`--- ${path}`, `+++ ${path}`];
-  const max = Math.max(a.length, b.length);
-  for (let i = 0; i < max; i++) {
-    if (a[i] === b[i]) continue;
-    if (a[i] !== undefined) lines.push(`-${a[i]}`);
-    if (b[i] !== undefined) lines.push(`+${b[i]}`);
-  }
-  return lines.join("\n");
 }
 
 const REGEX_SPECIAL = /[.*+?^${}()|[\]\\]/;
@@ -288,7 +275,7 @@ function writeFileTool(root: string): Tool {
       const before = await readBefore(abs);
       return {
         summary: `write_file(${path})`,
-        diff: unifiedDiff(before, content, path),
+        diff: diffFiles(before, content, path).diff,
       };
     },
   };
@@ -361,7 +348,7 @@ function editFileTool(root: string): Tool {
       const { before, after } = await applyEdit(root, args);
       return {
         summary: `edit_file(${path})`,
-        diff: unifiedDiff(before, after, path),
+        diff: diffFiles(before, after, path).diff,
       };
     },
   };

@@ -11,3 +11,13 @@ You may obtain a copy of the License at
     http://www.apache.org/licenses/LICENSE-2.0
 
 Changes from upstream are described in FORK.md.
+
+---
+
+This product bundles the following third-party software, whose licences
+require their notices to be retained:
+
+  diff (jsdiff)
+  Copyright (c) 2009-2015, Kevin Decker <kpdecker@gmail.com>
+  Licensed under the BSD 3-Clause License.
+  https://github.com/kpdecker/jsdiff

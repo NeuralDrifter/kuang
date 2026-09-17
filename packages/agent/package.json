@@ -30,6 +30,7 @@
   "dependencies": {
     "bailian-cli-core": "workspace:*",
     "bailian-cli-runtime": "workspace:*",
+    "diff": "catalog:",
     "ink": "catalog:",
     "react": "catalog:"
   },
