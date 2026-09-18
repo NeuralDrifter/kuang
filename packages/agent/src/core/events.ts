@@ -29,6 +29,14 @@ export type AgentEvent =
   | { type: "tool_call"; call: ToolCall }
   | { type: "tool_approval_required"; call: ToolCall; preview: ToolPreview }
   | { type: "tool_result"; callId: string; ok: boolean; summary: string }
+  /**
+   * A file the agent changed, diffed from its content at first touch.
+   *
+   * Emitted only after the tool reports success, so the panel never shows a
+   * change that did not happen. Each emission for a path supersedes the last:
+   * the feed is the sequence, the folded view is the latest per path.
+   */
+  | { type: "file_changed"; path: string; diff: string; added: number; removed: number }
   /** Values withheld from this request, counted by rule id. Never the values. */
   | { type: "redacted"; counts: Record<string, number> }
   | { type: "turn_end"; usage: Usage }

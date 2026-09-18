@@ -64,6 +64,15 @@ export function plainRenderer(write: (s: string) => void, language: Language): E
         write(`${marker} ${status}: ${event.summary}\n`);
         break;
       }
+      case "file_changed": {
+        write(`
+${event.path} (+${event.added} -${event.removed})
+`);
+        if (event.diff)
+          write(`${event.diff}
+`);
+        break;
+      }
       case "redacted": {
         // Naming the rules and counts, never the values — this line is printed
         // to the same terminal the secrets came from, but a user reading it

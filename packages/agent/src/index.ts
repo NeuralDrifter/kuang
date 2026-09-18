@@ -34,6 +34,7 @@ import { forgetVault, hasVault, loadVault, saveVault } from "./core/redact/vault
 import { MutableOutput, passphraseAsker, type PassphraseAsker } from "./core/secret-prompt.ts";
 import { describeProject, projectPrompt } from "./core/project.ts";
 import { handleSlash } from "./core/slash.ts";
+import { FileBaselines } from "./core/file-baselines.ts";
 import { ask, type Question } from "./ui/ink/pending.ts";
 import { bailianTools } from "./core/tools/bailian.ts";
 import { fsTools } from "./core/tools/fs.ts";
@@ -108,6 +109,8 @@ interface Session {
   secrets: { passphrase: string } | undefined;
   /** Whether this conversation came off disk rather than starting fresh. */
   resumed: boolean;
+  /** File baselines for the diff panel, held for the session. */
+  baselines: FileBaselines;
   tools: ToolRegistry;
   approvals: ApprovalStore;
   vault: Vault;
@@ -309,6 +312,7 @@ async function buildSession(
     projectRoot: cwd,
     opening,
     tools: buildTools(cwd, language, await probeInterpreters(), platform),
+    baselines: new FileBaselines(cwd),
     approvals: buildApprovals(cwd),
     // Always present so `/pii on` works mid-session, whatever it started as.
     vault: new Vault(options.redact ?? false),

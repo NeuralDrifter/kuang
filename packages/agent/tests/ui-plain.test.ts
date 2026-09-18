@@ -66,3 +66,11 @@ test("turn_start and tool_approval_required do not throw and produce output", ()
   });
   expect(c.text()).toContain("write_file(b.ts)");
 });
+
+test("a file change is announced with its path and counts", () => {
+  const c = capture();
+  c.render({ type: "file_changed", path: "src/a.ts", diff: "+one", added: 1, removed: 0 });
+  expect(c.text()).toContain("src/a.ts");
+  expect(c.text()).toContain("+1");
+  expect(c.text()).toContain("+one");
+});

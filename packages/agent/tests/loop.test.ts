@@ -40,6 +40,7 @@ function opts(over: Partial<LoopOptions> & Pick<LoopOptions, "transport">): Loop
     sink,
     model: "qwen-max",
     language: "en-US",
+    baselines: new FileBaselines(mkdtempSync(join(tmpdir(), "kuang-loop-"))),
     ...over,
   };
 }
@@ -375,4 +376,138 @@ test("a null arguments delta does not append the text 'null'", async () => {
   );
   // And it actually ran, rather than failing to parse.
   expect(out.some((m) => m.role === "tool" && m.content.includes("contents of"))).toBe(true);
+});
+
+// --- Task 2: file_changed events ---
+
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fsTools } from "../src/core/tools/fs.ts";
+import { FileBaselines } from "../src/core/file-baselines.ts";
+
+/** Run one scripted tool call through the real loop, with real file tools. */
+async function runOneCall(
+  name: string,
+  args: Record<string, unknown>,
+  root: string = mkdtempSync(join(tmpdir(), "kuang-loop-")),
+): Promise<{ events: ReturnType<typeof collect>["events"]; root: string }> {
+  const { sink, events } = collect();
+  const registry = new ToolRegistry();
+  for (const tool of fsTools(root)) registry.register(tool);
+
+  await runTurn([{ role: "user", content: "go" }], {
+    tools: registry,
+    approvals: new ApprovalStore([]),
+    ask: async () => "allow",
+    sink,
+    model: "qwen-max",
+    language: "en-US",
+    baselines: new FileBaselines(root),
+    transport: scripted([
+      [
+        { text: "On it." },
+        { toolCall: { index: 0, id: "c1", name, argumentsDelta: JSON.stringify(args) } },
+      ],
+      [{ text: "Done." }],
+    ]),
+  });
+
+  return { events, root };
+}
+
+test("a successful write emits file_changed with the baseline-to-current diff", async () => {
+  const { events } = await runOneCall("write_file", { path: "a.ts", content: "one\ntwo\n" });
+
+  const changed = events.filter((e) => e.type === "file_changed");
+  expect(changed).toHaveLength(1);
+  const change = changed[0]!;
+  expect(change.type === "file_changed" && change.path).toBe("a.ts");
+  expect(change.type === "file_changed" && change.added).toBe(2);
+  expect(change.type === "file_changed" && change.removed).toBe(0);
+});
+
+test("a second edit diffs against the original, not the previous edit", async () => {
+  const root = mkdtempSync(join(tmpdir(), "kuang-loop-"));
+  writeFileSync(join(root, "a.ts"), "one\ntwo\n", "utf-8");
+
+  const { sink, events } = collect();
+  const registry = new ToolRegistry();
+  for (const tool of fsTools(root)) registry.register(tool);
+
+  // Round 1: edit "two" -> "TWO". Round 2: edit "one" -> "ONE".
+  await runTurn([{ role: "user", content: "edit" }], {
+    tools: registry,
+    approvals: new ApprovalStore([]),
+    ask: async () => "allow",
+    sink,
+    model: "qwen-max",
+    language: "en-US",
+    baselines: new FileBaselines(root),
+    transport: scripted([
+      [
+        {
+          toolCall: {
+            index: 0,
+            id: "c1",
+            name: "edit_file",
+            argumentsDelta: JSON.stringify({ path: "a.ts", old: "two", new: "TWO" }),
+          },
+        },
+      ],
+      [
+        {
+          toolCall: {
+            index: 0,
+            id: "c2",
+            name: "edit_file",
+            argumentsDelta: JSON.stringify({ path: "a.ts", old: "one", new: "ONE" }),
+          },
+        },
+      ],
+      [{ text: "Done." }],
+    ]),
+  });
+
+  const changed = events.filter((e) => e.type === "file_changed");
+  expect(changed).toHaveLength(2);
+
+  // The second diff must describe the file as it differs from the ORIGINAL:
+  // "two"->"TWO" AND "one"->"ONE". Diffing against the previous edit would
+  // only see the second change; diffing against nothing would see nothing.
+  const second = changed[1]!;
+  expect(second.type === "file_changed" && second.added).toBe(2);
+  expect(second.type === "file_changed" && second.removed).toBe(2);
+  expect(second.type === "file_changed" && second.diff).toContain("-two");
+  expect(second.type === "file_changed" && second.diff).toContain("+TWO");
+  expect(second.type === "file_changed" && second.diff).toContain("-one");
+  expect(second.type === "file_changed" && second.diff).toContain("+ONE");
+});
+
+test("a failed edit emits no file_changed", async () => {
+  const root = mkdtempSync(join(tmpdir(), "kuang-loop-"));
+  writeFileSync(join(root, "a.ts"), "same\nsame\n", "utf-8");
+
+  const { events } = await runOneCall(
+    "edit_file",
+    { path: "a.ts", old: "same", new: "other" },
+    root,
+  );
+
+  // "same" occurs twice, so applyEdit refuses; the panel must not show a
+  // change that never happened.
+  const results = events.filter((e) => e.type === "tool_result");
+  expect(results).toHaveLength(1);
+  expect(results[0]!.type === "tool_result" && results[0]!.ok).toBe(false);
+  expect(events.filter((e) => e.type === "file_changed")).toHaveLength(0);
+});
+
+test("a write that changes nothing emits no file_changed", async () => {
+  const root = mkdtempSync(join(tmpdir(), "kuang-loop-"));
+  writeFileSync(join(root, "a.ts"), "same\n", "utf-8");
+
+  const { events } = await runOneCall("write_file", { path: "a.ts", content: "same\n" }, root);
+
+  expect(events.filter((e) => e.type === "tool_result" && e.ok)).toHaveLength(1);
+  expect(events.filter((e) => e.type === "file_changed")).toHaveLength(0);
 });

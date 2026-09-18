@@ -11,6 +11,10 @@ import { expect, test } from "vite-plus/test";
 import { ApprovalStore } from "../src/core/approvals.ts";
 import { collect } from "../src/core/events.ts";
 import { runTurn, type LoopOptions, type StreamChunk } from "../src/core/loop.ts";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { FileBaselines } from "../src/core/file-baselines.ts";
 import type { AgentMessage } from "../src/core/messages.ts";
 import { Vault } from "../src/core/redact/vault.ts";
 import { ToolRegistry, type Tool } from "../src/core/tools/registry.ts";
@@ -55,6 +59,7 @@ function opts(over: Partial<LoopOptions> & Pick<LoopOptions, "transport">): Loop
     sink,
     model: "qwen-max",
     language: "en-US",
+    baselines: new FileBaselines(mkdtempSync(join(tmpdir(), "kuang-redact-"))),
     ...over,
   };
 }

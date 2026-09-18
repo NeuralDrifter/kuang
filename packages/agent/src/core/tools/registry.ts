@@ -27,6 +27,13 @@ export interface Tool {
   run(args: Record<string, unknown>): Promise<string>;
   /** Shown before approval. Required in practice for `ask` tools. */
   preview?(args: Record<string, unknown>): Promise<ToolPreview>;
+  /**
+   * The project-relative path this call will modify, when it modifies one.
+   *
+   * Kept a plain verbatim path: the tool's own argument handling is the one
+   * source of validation truth, and anything smarter here would drift from it.
+   */
+  affects?(args: Record<string, unknown>): string | undefined;
 }
 
 export class ToolRegistry {

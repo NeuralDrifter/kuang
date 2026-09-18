@@ -23,9 +23,26 @@ export interface Entry {
   ok?: boolean;
 }
 
+/** One file the agent changed, diffed from its content at first touch. */
+export interface FileChange {
+  id: number;
+  path: string;
+  diff: string;
+  added: number;
+  removed: number;
+}
+
 export interface TranscriptState {
   /** Finished and immutable. Printed once, never redrawn. */
   done: Entry[];
+  /**
+   * Files the agent has changed, in the order the changes happened.
+   *
+   * Deliberately not folded into `done`: a diff is not a line of conversation,
+   * and flattening one into text loses the structure the panel renders from.
+   * The folded per-file view is the latest entry for each path.
+   */
+  changes: FileChange[];
   /** The reply currently streaming in, if any. */
   streaming: string;
   /** Set while a turn is in flight, so the UI can show it is busy. */
@@ -34,7 +51,13 @@ export interface TranscriptState {
 }
 
 export function emptyTranscript(): TranscriptState {
-  return { done: [], streaming: "", busy: false, tokens: { prompt: 0, completion: 0 } };
+  return {
+    done: [],
+    changes: [],
+    streaming: "",
+    busy: false,
+    tokens: { prompt: 0, completion: 0 },
+  };
 }
 
 let nextId = 0;
@@ -113,6 +136,18 @@ export function reduce(state: TranscriptState, event: AgentEvent): TranscriptSta
     case "tool_result":
       return { ...state, done: [...state.done, entry("tool", event.summary, event.ok)] };
 
+    case "file_changed": {
+      nextId += 1;
+      const change: FileChange = {
+        id: nextId,
+        path: event.path,
+        diff: event.diff,
+        added: event.added,
+        removed: event.removed,
+      };
+      return { ...state, changes: [...state.changes, change] };
+    }
+
     case "redacted": {
       const parts = Object.entries(event.counts)
         .sort(([a], [b]) => a.localeCompare(b))
@@ -129,6 +164,7 @@ export function reduce(state: TranscriptState, event: AgentEvent): TranscriptSta
       // The reply is finished, so it can move into the part that never redraws.
       const done = state.streaming ? [...state.done, entry("reply", state.streaming)] : state.done;
       return {
+        ...state,
         done,
         streaming: "",
         busy: false,

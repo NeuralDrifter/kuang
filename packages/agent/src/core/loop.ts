@@ -23,6 +23,8 @@ import type { Vault } from "./redact/vault.ts";
 import type { EventSink, ToolPreview, Usage } from "./events.ts";
 import type { Tool, ToolRegistry } from "./tools/registry.ts";
 import type { ApprovalDecision, ApprovalStore } from "./approvals.ts";
+import { diffFiles } from "./diff.ts";
+import type { FileBaselines } from "./file-baselines.ts";
 
 export interface StreamChunk {
   text?: string;
@@ -49,6 +51,8 @@ export interface LoopOptions {
    * any tool about to act on them. The transcript itself keeps real values.
    */
   vault?: Vault;
+  /** File baselines for the `file_changed` events. Held for the session. */
+  baselines: FileBaselines;
 }
 
 /**
@@ -301,13 +305,13 @@ async function consentFor(
   return undefined;
 }
 
-/** Run the tool, reporting either outcome as a tool message. */
+/** Run the tool, reporting either outcome as a tool message and its success. */
 async function runTool(
   tool: Tool,
   call: ToolCall,
   args: Record<string, unknown>,
   sink: EventSink,
-): Promise<AgentMessage> {
+): Promise<{ message: AgentMessage; ok: boolean }> {
   try {
     const raw = await tool.run(args);
     // A tool that answers with nothing is indistinguishable from one that
@@ -316,11 +320,14 @@ async function runTool(
     const result = raw.trim() === "" ? "(the tool returned no output)" : raw;
 
     sink({ type: "tool_result", callId: call.id, ok: true, summary: result });
-    return { role: "tool", toolCallId: call.id, content: result };
+    return { message: { role: "tool", toolCallId: call.id, content: result }, ok: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     sink({ type: "tool_result", callId: call.id, ok: false, summary: message });
-    return { role: "tool", toolCallId: call.id, content: `Tool failed: ${message}` };
+    return {
+      message: { role: "tool", toolCallId: call.id, content: `Tool failed: ${message}` },
+      ok: false,
+    };
   }
 }
 
@@ -351,7 +358,39 @@ async function resolveCall(call: ToolCall, options: LoopOptions): Promise<AgentM
   }
 
   const refusal = await consentFor(tool, call, parsed.args, options);
-  return refusal ? refuse(refusal) : runTool(tool, call, parsed.args, options.sink);
+  if (refusal) return refuse(refusal);
+
+  // A denied tool must not leave a snapshot behind: baselines record first
+  // touch, and "asked and refused" is not a touch.
+  let affected: string | undefined;
+  try {
+    affected = tool.affects?.(parsed.args);
+  } catch {
+    // `affects` is a best-effort observer; the tool's own run validates the
+    // path and reports failures properly through tool_result.
+    affected = undefined;
+  }
+  if (affected) await options.baselines.capture(affected);
+
+  const { message, ok } = await runTool(tool, call, parsed.args, options.sink);
+
+  if (ok && affected) {
+    const after = await options.baselines.readNow(affected);
+    if (after !== undefined) {
+      const { diff, added, removed } = diffFiles(
+        options.baselines.baselineOf(affected) ?? "",
+        after,
+        affected,
+      );
+      // Nothing changed is not a change: an empty diff would draw a phantom
+      // entry in the panel for a write that was a no-op.
+      if (added > 0 || removed > 0) {
+        options.sink({ type: "file_changed", path: affected, diff, added, removed });
+      }
+    }
+  }
+
+  return message;
 }
 
 /**

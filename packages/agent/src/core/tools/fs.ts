@@ -67,7 +67,7 @@ function realpathOrNearest(target: string): string {
  * The lexical path is what gets returned, so callers keep showing the user
  * the path they asked about rather than wherever it happens to live.
  */
-function resolveInProject(root: string, path: string): string {
+export function resolveInProject(root: string, path: string): string {
   const resolvedRoot = resolve(root);
   const resolvedPath = resolve(resolvedRoot, path);
   if (!contains(resolvedRoot, resolvedPath)) {
@@ -260,6 +260,7 @@ function writeFileTool(root: string): Tool {
       const bytes = Buffer.byteLength(content, "utf-8");
       return `Wrote ${bytes} bytes to ${path}`;
     },
+    affects: (args) => String(args.path),
     preview: async (args): Promise<ToolPreview> => {
       const path = String(args.path);
       const content = String(args.content);
@@ -335,6 +336,7 @@ function editFileTool(root: string): Tool {
       await writeFile(abs, after, "utf-8");
       return `Edited ${String(args.path)}`;
     },
+    affects: (args) => String(args.path),
     preview: async (args): Promise<ToolPreview> => {
       const path = String(args.path);
 

@@ -187,3 +187,19 @@ test("a tool call with no preceding text adds no empty line", () => {
   const state = fold([{ type: "tool_call", call: { id: "c1", name: "glob", arguments: "{}" } }]);
   expect(state.done.map((e) => e.kind)).toEqual(["tool"]);
 });
+
+// --- Task 2/3: file_changed entries ---
+
+test("a file_changed event is kept as its own entry, in order", () => {
+  const state = fold([
+    { type: "file_changed", path: "a.ts", diff: "--- a.ts\n+++ a.ts\n+one", added: 1, removed: 0 },
+    { type: "file_changed", path: "b.ts", diff: "--- b.ts\n+++ b.ts\n-two", added: 0, removed: 1 },
+  ]);
+
+  // A diff is not a line of conversation: it must not be flattened into a
+  // `done` text entry, where the panel could never recover it as structure.
+  expect(state.changes).toHaveLength(2);
+  expect(state.changes[0]).toMatchObject({ path: "a.ts", added: 1, removed: 0 });
+  expect(state.changes[1]).toMatchObject({ path: "b.ts", added: 0, removed: 1 });
+  expect(state.done).toHaveLength(0);
+});
