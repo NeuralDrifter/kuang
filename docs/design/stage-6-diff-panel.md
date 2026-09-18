@@ -8,8 +8,8 @@ mouse and the per-pane scrollbars; see [stage-5-tui.md](stage-5-tui.md).
 | 1 — `diff` dependency and the diff module   | done (`86aaf8e3`)                |
 | 2 — `affects`, baselines and `file_changed` | done (`c810ddcf`)                |
 | 3 — the transcript's change list            | done (`c810ddcf`)                |
-| 4 — `<FileDiff>` and the pane mode          | not started                      |
-| 5 — the `/panes` menu                       | not started                      |
+| 4 — `<FileDiff>` and the pane mode          | done (`857c4086`)                |
+| 5 — the `/panes` menu                       | done (`857c4086`)                |
 | 6 — plain renderer, docs, issue log         | plain renderer done (`c810ddcf`) |
 
 ---
