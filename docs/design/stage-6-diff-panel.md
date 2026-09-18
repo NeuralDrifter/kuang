@@ -3,14 +3,14 @@
 Status: **designed, not started.** Stage 5 (the Ink UI) carried the panes, the
 mouse and the per-pane scrollbars; see [stage-5-tui.md](stage-5-tui.md).
 
-| Task                                        | State       |
-| ------------------------------------------- | ----------- |
-| 1 — `diff` dependency and the diff module   | not started |
-| 2 — `affects`, baselines and `file_changed` | not started |
-| 3 — the transcript's change list            | not started |
-| 4 — `<FileDiff>` and the pane mode          | not started |
-| 5 — the `/panes` menu                       | not started |
-| 6 — plain renderer, docs, issue log         | not started |
+| Task                                        | State                            |
+| ------------------------------------------- | -------------------------------- |
+| 1 — `diff` dependency and the diff module   | done (`86aaf8e3`)                |
+| 2 — `affects`, baselines and `file_changed` | done (`c810ddcf`)                |
+| 3 — the transcript's change list            | done (`c810ddcf`)                |
+| 4 — `<FileDiff>` and the pane mode          | not started                      |
+| 5 — the `/panes` menu                       | not started                      |
+| 6 — plain renderer, docs, issue log         | plain renderer done (`c810ddcf`) |
 
 ---
 
@@ -236,6 +236,23 @@ jsdiff. Anything found and deferred goes in `KNOWN_ISSUES.md`.
   session runs will show that edit as the model's, because the baseline is from
   first touch and nothing re-reads it. Detecting it means comparing disk against
   last-known-after before every write. Deferred until it bites.
+
+## Deviations from the spec as written
+
+Implementation is the spec's authority where they disagreed; three calls
+went differently than the plan's wording suggested:
+
+- **Tasks 2 and 3 landed together.** The exhaustiveness checks in
+  `transcript.ts` and `plain.ts` refuse to compile against the new event,
+  so the change-list plumbing had to arrive in the same commit as the
+  event itself. The spec's task boundary did not anticipate that forcing
+  function.
+- **The snapshot happens after consent, not before it.** A tool that is
+  asked about and refused is not a touch; snapshotting first would have
+  recorded baselines for files never written.
+- **A write that changes nothing emits no event.** The spec says the event
+  is emitted after success; an empty diff is success with no change, and
+  it would draw a phantom panel entry.
 
 ## Known risk
 
