@@ -98,28 +98,37 @@ export function Pane({
     <Box width="50%" flexDirection="row">
       <Box
         flexGrow={1}
+        flexShrink={1}
+        height="100%"
         flexDirection="column"
-        overflowY="hidden"
-        paddingX={1}
         borderStyle={divider ? "single" : undefined}
         borderRight={false}
         borderTop={false}
         borderBottom={false}
         borderColor="gray"
       >
-        {/*
-          flexShrink={0} keeps the content at its natural height so it can
-          overflow and be scrolled; without it Yoga squeezes it into the
-          viewport and there is nothing left to move. The negative margin is
-          the scroll: the parent clips, this slides under the clip.
-        */}
-        <Box ref={contentRef} flexDirection="column" flexShrink={0} marginTop={-geometry.scrollTop}>
-          {entries.map((entry) => (
-            <Box key={entry.id} flexShrink={0} flexDirection="column">
-              <Line entry={entry} />
+        <Box flexGrow={1} flexDirection="column" overflowY="hidden">
+          <Box paddingX={1} flexDirection="column">
+            {/*
+              flexShrink={0} keeps the content at its natural height so it can
+              overflow and be scrolled; without it Yoga squeezes it into the
+              viewport and there is nothing left to move. The negative margin is
+              the scroll: the parent clips, this slides under the clip.
+            */}
+            <Box
+              ref={contentRef}
+              flexDirection="column"
+              flexShrink={0}
+              marginTop={-geometry.scrollTop}
+            >
+              {entries.map((entry) => (
+                <Box key={entry.id} flexShrink={0} flexDirection="column">
+                  <Line entry={entry} />
+                </Box>
+              ))}
+              {children}
             </Box>
-          ))}
-          {children}
+          </Box>
         </Box>
       </Box>
       <Scrollbar geometry={geometry} focused={focused} />

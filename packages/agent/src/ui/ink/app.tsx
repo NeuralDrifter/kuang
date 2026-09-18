@@ -136,11 +136,13 @@ export function App({
       if (handled) {
         if (handled.text) setState((current) => withNotice(current, handled.text!));
         if (handled.layout) {
-          setLayout((current) => {
-            const next = current === "flow" ? "panes" : "flow";
-            setState((s) => withNotice(s, `Switched to ${next} layout.`));
-            return next;
-          });
+          // Both derived from `layout` rather than setting one inside the
+          // other's updater: an updater has to be a pure function of the state
+          // it is given, and React is free to call it more than once or to
+          // discard the result.
+          const next = layout === "flow" ? "panes" : "flow";
+          setLayout(next);
+          setState((current) => withNotice(current, `Switched to ${next} layout.`));
         }
         if (handled.secrets === "save") {
           void doSaveSecrets(askPassphrase, (msg) => setState((c) => withNotice(c, msg)));
@@ -158,7 +160,7 @@ export function App({
         busy.current = false;
       });
     },
-    [emit, exit, onCommand, onSubmit, doSaveSecrets, doForgetSecrets, askPassphrase],
+    [emit, exit, onCommand, onSubmit, doSaveSecrets, doForgetSecrets, askPassphrase, layout],
   );
 
   // While a question is up, every keystroke means an answer to it, so the
@@ -420,8 +422,20 @@ export function App({
   }
 
   return (
-    <Box height={rows} flexDirection="column" width="100%">
-      <Box ref={viewportRef} flexGrow={1} flexDirection="row" overflowY="hidden">
+    // One row shorter AND one column narrower than the terminal. Measured from
+    // a real run: Ink pads every pane row with trailing spaces to the box's
+    // full width, so a box the exact size of the terminal writes 46 full-width
+    // rows per frame. Each one lands in the last column, sets pending-wrap,
+    // and its newline scrolls the terminal — ~47 scrolls per redraw, every
+    // keystroke and every token. The content always sits at the top of the
+    // frame, so it was always just scrolled out of view while the bottom rows
+    // of older frames (scrollbars, borders) stayed visible and stable. That
+    // is also where the alternating blank rows between scrollbar glyphs came
+    // from: one scroll inserted between consecutive glyph rows. `rows - 1`
+    // alone was never enough — the full-width rows keep scrolling; both
+    // dimensions have to step back.
+    <Box height={Math.max(1, rows - 1)} width={Math.max(1, columns - 1)} flexDirection="column">
+      <Box ref={viewportRef} flexGrow={1} flexDirection="row">
         <PaneView
           contentRef={convRef}
           entries={conversation}
