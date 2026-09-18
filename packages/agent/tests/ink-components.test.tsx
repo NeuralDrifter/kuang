@@ -25,16 +25,17 @@ import { emptyTranscript, type Entry } from "../src/ui/ink/transcript.ts";
 import type { ApprovalDecision } from "../src/core/approvals.ts";
 
 /** Render to a string, the way the terminal would have seen it. */
-async function draw(element: React.ReactElement): Promise<string> {
+async function draw(element: React.ReactElement, columns = 80): Promise<string> {
   let out = "";
   const sink = new Writable({
     write(chunk, _encoding, done) {
       out += String(chunk);
       done();
     },
-  }) as never;
+  }) as Writable & { columns: number };
+  sink.columns = columns;
 
-  const app = render(element, { stdout: sink, patchConsole: false });
+  const app = render(element, { stdout: sink as never, patchConsole: false });
   await new Promise((resolve) => setTimeout(resolve, 50));
   app.unmount();
   return out;
@@ -215,4 +216,69 @@ test("content that fits leaves the track solid", async () => {
     />,
   );
   expect(bar(screen)).toEqual(["█", "█", "█"]);
+});
+
+// --- Stage 6: FileDiff and Menu ---
+
+import type { FileChange } from "../src/ui/ink/transcript.ts";
+import { FileDiff, Menu } from "../src/ui/ink/components.tsx";
+
+const change = (over: Partial<FileChange> = {}): FileChange => ({
+  id: 1,
+  path: "src/a.ts",
+  diff: "--- src/a.ts\n+++ src/a.ts\n+added line\n-removed line\n  context line",
+  added: 2,
+  removed: 1,
+  ...over,
+});
+
+test("a file diff names its file and counts its changes", async () => {
+  const screen = await draw(<FileDiff change={change()} />);
+  expect(screen).toContain("src/a.ts");
+  expect(screen).toContain("+2");
+  expect(screen).toContain("-1");
+});
+
+test("a file diff shows the hunks, distinguishable without colour", async () => {
+  // Colour does not survive the render-to-string harness (or a pipe), so the
+  // markers themselves must carry the meaning: + added, - removed.
+  const screen = await draw(<FileDiff change={change()} />);
+  expect(screen).toContain("+added line");
+  expect(screen).toContain("-removed line");
+  expect(screen).toContain("  context line");
+});
+
+test("the menu lists every choice and marks the selected one", async () => {
+  const screen = await draw(
+    <Menu items={["Tool calls", "Live diff", "Back to flow"]} selected={1} />,
+  );
+
+  for (const label of ["1 Tool calls", "2 Live diff", "3 Back to flow"]) {
+    expect(screen).toContain(label);
+  }
+  // The marker sits on the selected row only. Count, don't match position:
+  // exactly one ❯ total.
+  expect((screen.match(/❯/g) ?? []).length).toBe(1);
+});
+
+test("a narrow terminal truncates the hint instead of wrapping the status line", async () => {
+  // The hint and the session info together overflow 80 columns. The hint
+  // must give way — truncated — so the status stays one line and the session
+  // info survives; a wrap splits the hint mid-word and buries the tail.
+  const screen = await draw(
+    <Status
+      state={emptyTranscript()}
+      session={{ id: "session-1", model: "a-model", redacting: false }}
+      hint="tab: conversation · ctrl+o: mouse off · mode: diff"
+    />,
+    80,
+  );
+
+  // With a wrap, the hint's tail lands on its own line ("diff" alone); with
+  // truncation the hint simply ends. Either way the tail must never break
+  // free of its label.
+  const lines = screen.split("\n");
+  expect(lines.filter((l) => l.includes("diff") && !l.includes("mode:"))).toHaveLength(0);
+  // And the session info must survive on some line.
+  expect(lines.some((l) => l.includes("a-model"))).toBe(true);
 });

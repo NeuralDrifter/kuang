@@ -19,7 +19,7 @@
 import React from "react";
 import { Box, Text, type DOMElement } from "ink";
 import type { ApprovalDecision } from "../../core/approvals.ts";
-import type { Entry, TranscriptState } from "./transcript.ts";
+import type { Entry, FileChange, TranscriptState } from "./transcript.ts";
 import type { Question } from "./pending.ts";
 import { thumb, type ScrollGeometry } from "./scroll.ts";
 
@@ -81,14 +81,12 @@ export function Scrollbar({
  */
 export function Pane({
   contentRef,
-  entries,
   geometry,
   focused,
   divider = false,
   children,
 }: {
   contentRef: React.RefObject<DOMElement | null>;
-  entries: Entry[];
   geometry: ScrollGeometry;
   focused: boolean;
   divider?: boolean;
@@ -121,17 +119,70 @@ export function Pane({
               flexShrink={0}
               marginTop={-geometry.scrollTop}
             >
-              {entries.map((entry) => (
-                <Box key={entry.id} flexShrink={0} flexDirection="column">
-                  <Line entry={entry} />
-                </Box>
-              ))}
               {children}
             </Box>
           </Box>
         </Box>
       </Box>
       <Scrollbar geometry={geometry} focused={focused} />
+    </Box>
+  );
+}
+
+/**
+ * One file the agent changed: its name, its counts, and the hunks.
+ *
+ * The diff text already carries its own meaning — `+` added, `-` removed,
+ * space context — because colour is lost down a pipe and absent for anyone
+ * who cannot distinguish it. Colour only reinforces the markers.
+ */
+export function FileDiff({ change }: { change: FileChange }): React.ReactElement {
+  return (
+    <Box flexDirection="column" flexShrink={0} marginY={1}>
+      <Text bold>
+        {change.path} <Text color="green">+{change.added}</Text>{" "}
+        <Text color="red">-{change.removed}</Text>
+      </Text>
+      {change.diff.split("\n").map((line, i) => {
+        const colour =
+          line.startsWith("+") && !line.startsWith("+++")
+            ? "green"
+            : line.startsWith("-") && !line.startsWith("---")
+              ? "red"
+              : undefined;
+        return (
+          <Text key={i} color={colour} dimColor={colour === undefined}>
+            {line}
+          </Text>
+        );
+      })}
+    </Box>
+  );
+}
+
+/**
+ * The panel menu, drawn only.
+ *
+ * Numbered so a digit is a one-key accelerator, and the `❯` marks the row the
+ * arrows are on. Selection and key handling live with the state that owns
+ * them; this stays a pure function of its props like everything else here.
+ */
+export function Menu({
+  items,
+  selected,
+}: {
+  items: string[];
+  selected: number;
+}): React.ReactElement {
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor="cyan" padding={1} marginY={1}>
+      <Text bold>Panel</Text>
+      {items.map((item, i) => (
+        <Text key={item} color={i === selected ? "cyan" : undefined}>
+          {i === selected ? "❯" : " "} {i + 1} {item}
+        </Text>
+      ))}
+      <Text dimColor>↑↓ move · enter choose · esc cancel</Text>
     </Box>
   );
 }
@@ -206,8 +257,19 @@ export function Status({
   const total = state.tokens.prompt + state.tokens.completion;
   return (
     <Box justifyContent="space-between" width="100%">
-      <Box>{hint ? <Text dimColor>{hint}</Text> : null}</Box>
-      <Box>
+      {/*
+        The hint gives way on a narrow terminal: it truncates instead of
+        wrapping, so the status stays one line and a hint tail can never
+        break free of its label onto its own row.
+      */}
+      <Box flexShrink={1}>
+        {hint ? (
+          <Text dimColor wrap="truncate">
+            {hint}
+          </Text>
+        ) : null}
+      </Box>
+      <Box flexShrink={0}>
         <Text dimColor>
           {session.model} · {session.redacting ? "redacting" : "no redaction"} ·{" "}
           {session.id.slice(0, 15)}

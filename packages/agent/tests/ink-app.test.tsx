@@ -57,7 +57,10 @@ async function drive(keys: string, over: Partial<InkWiring> = {}): Promise<strin
       done();
     },
   }) as Writable & { columns: number; rows: number };
-  stdout.columns = 80;
+  // A realistic width, as a real terminal has; at 80 columns the status line
+  // legitimately truncates the hint, which is tested separately in the
+  // components suite.
+  stdout.columns = 120;
   stdout.rows = 24;
 
   const element: React.ReactElement = <App {...wiring(over)} />;
@@ -94,29 +97,58 @@ test("the app starts in the flow layout, with no scrollbars", async () => {
   expect(screen).not.toContain("░");
 });
 
-test("/panes switches layout and draws a scrollbar for each pane", async () => {
+test("/panes opens a menu instead of switching, listing the choices", async () => {
   const screen = await drive(`/panes${ENTER}`);
 
-  // Solid rather than dotted: an empty transcript fits its pane, and a thumb
-  // that fills its whole track is how "there is nothing below" is drawn.
-  // A dotted run here would mean the geometry thinks content is off-screen
-  // when none exists.
-  expect(screen).toContain("█");
-  expect(screen).not.toContain("░");
+  // The menu is the fourth state of the input block; layout has not moved.
+  expect(screen).toContain("1 Tool calls");
+  expect(screen).toContain("2 Live diff");
+  expect(screen).toContain("3 Back to flow");
+  expect(screen).not.toContain("tab: conversation"); // still flow
 });
 
-test("the panes layout says which pane the paging keys will move", async () => {
-  const screen = await drive(`/panes${ENTER}`);
+test("escape closes the menu and leaves the layout alone", async () => {
+  const screen = await drive(`/panes${ENTER}\x1b`);
+
+  expect(screen).not.toContain("Tool calls");
+  expect(screen).not.toContain("tab: conversation"); // still flow
+});
+
+test("choosing tool calls enters panes with the tool log", async () => {
+  const screen = await drive(`/panes${ENTER}1`);
+
   expect(screen).toContain("tab: conversation");
+  expect(screen).toContain("█"); // scrollbars drawn
+  expect(screen).toContain("mouse off");
+});
+
+test("choosing live diff enters panes with the diff pane", async () => {
+  const screen = await drive(`/panes${ENTER}2`);
+
+  expect(screen).toContain("tab: conversation");
+  expect(screen).toContain("mode: diff");
+});
+
+test("arrows move the selection, enter chooses", async () => {
+  // down once selects "Live diff", enter activates it.
+  const screen = await drive(`/panes${ENTER}\x1b[B${ENTER}`);
+  expect(screen).toContain("mode: diff");
+});
+
+test("from panes, choosing back to flow returns there", async () => {
+  const screen = await drive(`/panes${ENTER}1/panes${ENTER}3`);
+
+  expect(screen).not.toContain("tab: conversation"); // flow again
+  expect(screen).toContain("a-model"); // status line still there
 });
 
 test("tab moves focus to the other pane", async () => {
-  const screen = await drive(`/panes${ENTER}\t`);
+  const screen = await drive(`/panes${ENTER}1\t`);
   expect(screen).toContain("tab: tools");
 });
 
 test("the mouse starts unhooked, so the terminal keeps its selection", async () => {
-  const screen = await drive(`/panes${ENTER}`);
+  const screen = await drive(`/panes${ENTER}1`);
   expect(screen).toContain("mouse off");
 });
 
@@ -133,4 +165,25 @@ test("a passphrase is delivered exactly as typed, spaces and all", async () => {
   });
 
   expect(answered).toBe("  hunter two  ");
+});
+
+test("the diff pane shows what the agent changed", async () => {
+  // The stage's whole point: an event the loop emitted appears in the panel.
+  const screen = await drive(`hello?\r/panes${ENTER}2`, {
+    onSubmit: async (_input, emit) => {
+      emit({ type: "turn_start" });
+      emit({
+        type: "file_changed",
+        path: "src/a.ts",
+        diff: "--- src/a.ts\n+++ src/a.ts\n+new line",
+        added: 1,
+        removed: 0,
+      });
+      emit({ type: "turn_end", usage: { promptTokens: 1, completionTokens: 1 } });
+    },
+  });
+
+  expect(screen).toContain("mode: diff");
+  expect(screen).toContain("src/a.ts");
+  expect(screen).toContain("+new line");
 });

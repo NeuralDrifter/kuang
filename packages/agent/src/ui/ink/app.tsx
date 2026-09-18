@@ -28,7 +28,7 @@ import type { PlatformAccess } from "../../core/platform.ts";
 import type { ApprovalDecision } from "../../core/approvals.ts";
 import type { AgentOptions, InkWiring } from "../../index.ts";
 import type { Question } from "./pending.ts";
-import { Approval, Line, Pane as PaneView, Status } from "./components.tsx";
+import { Approval, FileDiff, Line, Menu, Pane as PaneView, Status } from "./components.tsx";
 import { MOUSE_OFF, MOUSE_ON, paneForColumn, parseMouseEvents, wheelDelta } from "./mouse.ts";
 import {
   clampScroll,
@@ -123,6 +123,10 @@ export function App({
   }, []);
 
   const [layout, setLayout] = useState<"flow" | "panes">("flow");
+  /** What the right pane renders. */
+  const [paneMode, setPaneMode] = useState<"tools" | "diff">("tools");
+  const [menu, setMenu] = useState(false);
+  const [menuIndex, setMenuIndex] = useState(0);
 
   const submit = useCallback(
     (text: string) => {
@@ -136,13 +140,11 @@ export function App({
       if (handled) {
         if (handled.text) setState((current) => withNotice(current, handled.text!));
         if (handled.layout) {
-          // Both derived from `layout` rather than setting one inside the
-          // other's updater: an updater has to be a pure function of the state
-          // it is given, and React is free to call it more than once or to
-          // discard the result.
-          const next = layout === "flow" ? "panes" : "flow";
-          setLayout(next);
-          setState((current) => withNotice(current, `Switched to ${next} layout.`));
+          // Toggling hid the fact that the panel could show anything else;
+          // a menu makes the modes discoverable. It draws where the input
+          // line draws, and its keys stand the typing handlers down.
+          setMenu(true);
+          setMenuIndex(0);
         }
         if (handled.secrets === "save") {
           void doSaveSecrets(askPassphrase, (msg) => setState((c) => withNotice(c, msg)));
@@ -160,7 +162,7 @@ export function App({
         busy.current = false;
       });
     },
-    [emit, exit, onCommand, onSubmit, doSaveSecrets, doForgetSecrets, askPassphrase, layout],
+    [emit, exit, onCommand, onSubmit, doSaveSecrets, doForgetSecrets, askPassphrase],
   );
 
   // While a question is up, every keystroke means an answer to it, so the
@@ -207,7 +209,7 @@ export function App({
       }
       line.edit(input, key);
     },
-    { isActive: pending === undefined && pendingPassphrase === undefined },
+    { isActive: pending === undefined && pendingPassphrase === undefined && !menu },
   );
 
   useInput(
@@ -310,7 +312,36 @@ export function App({
     return undefined;
   };
 
-  const panesLive = layout === "panes" && pending === undefined && pendingPassphrase === undefined;
+  const panesLive =
+    layout === "panes" && pending === undefined && pendingPassphrase === undefined && !menu;
+
+  /** The panel menu's choices, in order. A digit is a one-key accelerator. */
+  const MENU_ITEMS = ["Tool calls", "Live diff", "Back to flow"] as const;
+
+  /** What picking `MENU_ITEMS[i]` does. */
+  function chooseMenu(i: number): void {
+    setMenu(false);
+    if (i === 2) {
+      setLayout("flow");
+      return;
+    }
+    setLayout("panes");
+    setPaneMode(i === 0 ? "tools" : "diff");
+  }
+
+  useInput(
+    (input, key) => {
+      if (key.upArrow) setMenuIndex((i) => Math.max(0, i - 1));
+      if (key.downArrow) setMenuIndex((i) => Math.min(MENU_ITEMS.length - 1, i + 1));
+      if (key.return) chooseMenu(menuIndex);
+      if (key.escape) setMenu(false);
+      // Accelerators: a digit chooses outright, no enter needed.
+      if (input === "1") chooseMenu(0);
+      if (input === "2") chooseMenu(1);
+      if (input === "3") chooseMenu(2);
+    },
+    { isActive: menu && pending === undefined && pendingPassphrase === undefined },
+  );
 
   useEffect(() => {
     if (!mouseHooked || layout !== "panes") return;
@@ -378,6 +409,8 @@ export function App({
     >
       {pending ? (
         <Approval question={pending} />
+      ) : menu ? (
+        <Menu items={[...MENU_ITEMS]} selected={menuIndex} />
       ) : pendingPassphrase ? (
         <Box>
           <Text color="yellow" bold>
@@ -438,10 +471,14 @@ export function App({
       <Box ref={viewportRef} flexGrow={1} flexDirection="row">
         <PaneView
           contentRef={convRef}
-          entries={conversation}
           geometry={geometryFor("conversation")}
           focused={focused === "conversation"}
         >
+          {conversation.map((entry) => (
+            <Box key={entry.id} flexShrink={0} flexDirection="column">
+              <Line entry={entry} />
+            </Box>
+          ))}
           {state.streaming ? (
             <Box flexShrink={0} marginTop={1}>
               <Text>⡇ {state.streaming}</Text>
@@ -451,11 +488,18 @@ export function App({
 
         <PaneView
           contentRef={toolRef}
-          entries={tools}
           geometry={geometryFor("tools")}
           focused={focused === "tools"}
           divider
-        />
+        >
+          {paneMode === "tools"
+            ? tools.map((entry) => (
+                <Box key={entry.id} flexShrink={0} flexDirection="column">
+                  <Line entry={entry} />
+                </Box>
+              ))
+            : state.changes.map((change) => <FileDiff key={change.id} change={change} />)}
+        </PaneView>
       </Box>
 
       {inputBlock}
@@ -463,7 +507,7 @@ export function App({
       <Status
         state={state}
         session={session}
-        hint={`tab: ${focused} · ctrl+o: mouse ${mouseHooked ? "on" : "off"}`}
+        hint={`tab: ${focused} · ctrl+o: mouse ${mouseHooked ? "on" : "off"} · mode: ${paneMode}`}
       />
     </Box>
   );
