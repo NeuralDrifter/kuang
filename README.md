@@ -63,7 +63,8 @@ are verified; only the live media responses are untested, for want of credits.
 - **Redaction** (`--redact`) — secrets and personal data replaced with
   placeholders on the way to the model and put back on the way out, so the
   model can work with them without ever reading them
-- Bilingual slash commands — `/help` · `/帮助`, `/pii` · `/脱敏`, `/sessions` · `/会话`, `/exit` · `/退出`
+- Bilingual slash commands — `/help` · `/帮助`, `/pii` · `/脱敏`, `/sessions` · `/会话`,
+  `/panes` · `/分栏`, `/exit` · `/退出`
 - **Knows where it is** — the working directory, whether that sits inside a
   larger repository, and the project's own `AGENTS.md` / `CLAUDE.md` / `KUANG.md`
   brief if it has one
@@ -71,7 +72,15 @@ are verified; only the live media responses are untested, for want of credits.
   "always allow" answers that outlive the terminal, scoped per project
 - Optional passphrase-sealed vault (`--save-secrets`) — off by default, because
   the vault living only in memory is the promise the rest of the design rests on
-- 344 tests — 339 headless unit tests plus 5 that drive the real CLI, with 5
+- **A full-screen Ink TUI** (pipes still get plain text): `/panes` opens a panel
+  menu — conversation beside tool calls, conversation beside a **live diff
+  panel**, or back to flow. Every file the agent writes or edits is diffed from
+  its content at first touch and shown as it happens. Panes scroll with the
+  mouse wheel, click-drag on their scrollbars, or PageUp/PageDown; Ctrl+O turns
+  mouse capture on and off so text selection stays yours, and Tab moves focus
+- The prompt edits like a line editor: cursor keys, delete vs backspace, and
+  up/down through command history
+- 459 tests — 454 headless unit tests plus 5 that drive the real CLI, with 5
   skipped where Windows refuses unprivileged symlinks (the same containment is
   covered there by directory junctions instead)
 
@@ -89,7 +98,6 @@ be more that only a real response would reveal. Treat these three as untested.
 
 **Not yet**
 
-- Ink-based TUI — the current renderer is plain text
 - Full bilingual coverage — UI labels and tool descriptions are localized,
   some payload strings are not yet
 - Skills as a knowledge layer
