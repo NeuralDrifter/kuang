@@ -6,8 +6,8 @@
  *
  * The diff these replace paired lines by index, so a single inserted line
  * reported every line below it as changed. That was survivable in an approval
- * box read once; the panel folds every edit to a file into one diff against
- * its original, which is exactly where index pairing falls apart.
+ * box read once; the panel shows a diff per edit and is read properly, which
+ * is exactly where index pairing falls apart.
  */
 import { expect, test } from "vite-plus/test";
 import { diffFiles } from "../src/core/diff.ts";

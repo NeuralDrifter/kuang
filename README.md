@@ -74,8 +74,8 @@ are verified; only the live media responses are untested, for want of credits.
   the vault living only in memory is the promise the rest of the design rests on
 - **A full-screen Ink TUI** (pipes still get plain text): `/panes` opens a panel
   menu — conversation beside tool calls, conversation beside a **live diff
-  panel**, or back to flow. Every file the agent writes or edits is diffed from
-  its content at first touch and shown as it happens. Panes scroll with the
+  panel**, or back to flow. Every write and edit is shown as it happens, each
+  diffed against the file as it stood before that edit. Panes scroll with the
   mouse wheel, click-drag on their scrollbars, or PageUp/PageDown; Ctrl+O turns
   mouse capture on and off so text selection stays yours, and Tab moves focus
 - The prompt edits like a line editor: cursor keys, delete vs backspace, and

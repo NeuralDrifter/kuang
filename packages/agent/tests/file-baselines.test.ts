@@ -4,9 +4,11 @@
 /**
  * The file baselines behind the diff panel.
  *
- * One snapshot per file, taken at first touch, held for the session: the
- * second edit to a file must diff against its original, not against the
- * previous edit, or the folded view drifts from what the user approved.
+ * Two things per file, and they are not the same. The **baseline** is the
+ * content at first touch, held for the session — what a revert would restore
+ * to. The **last after** is the content the previous successful write left,
+ * which is what the next edit diffs against so the panel answers "what did
+ * that edit do?" rather than re-reporting earlier changes.
  */
 import { expect, test } from "vite-plus/test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";

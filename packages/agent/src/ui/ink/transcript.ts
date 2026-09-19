@@ -23,7 +23,7 @@ export interface Entry {
   ok?: boolean;
 }
 
-/** One file the agent changed, diffed from its content at first touch. */
+/** One file the agent changed, diffed against its state before that edit. */
 export interface FileChange {
   id: number;
   path: string;

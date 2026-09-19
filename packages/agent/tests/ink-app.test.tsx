@@ -187,3 +187,23 @@ test("the diff pane shows what the agent changed", async () => {
   expect(screen).toContain("src/a.ts");
   expect(screen).toContain("+new line");
 });
+
+test("the diff pane shows removals as well as additions", async () => {
+  const screen = await drive(`hello?\r/panes${ENTER}2`, {
+    onSubmit: async (_input, emit) => {
+      emit({ type: "turn_start" });
+      emit({
+        type: "file_changed",
+        path: "src/a.ts",
+        diff: "--- src/a.ts\n+++ src/a.ts\n-old line\n+new line",
+        added: 1,
+        removed: 1,
+      });
+      emit({ type: "turn_end", usage: { promptTokens: 1, completionTokens: 1 } });
+    },
+  });
+
+  expect(screen).toContain("mode: diff");
+  expect(screen).toContain("-old line");
+  expect(screen).toContain("+new line");
+});
