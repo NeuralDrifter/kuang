@@ -375,14 +375,22 @@ async function resolveCall(call: ToolCall, options: LoopOptions): Promise<AgentM
   const { message, ok } = await runTool(tool, call, parsed.args, options.sink);
 
   if (ok && affected) {
-    const before = options.baselines.baselineOf(affected);
-    // `before` undefined means the first-touch read failed — a transient
-    // lock, say — not that the file was empty. Emitting a diff against ""
-    // would then show every existing line as an addition, which is a
-    // fabricated "-0,0" lie. Honest absence beats a wrong diff.
-    if (before !== undefined) {
-      const after = await options.baselines.readNow(affected);
-      if (after !== undefined) {
+    const after = await options.baselines.readNow(affected);
+    if (after !== undefined) {
+      // What this edit changed is the delta from the previous state: the
+      // last successful write, or the first-touch baseline for a first edit.
+      // Diffing every edit against the baseline re-reports earlier changes
+      // on top of the latest one, and a file created then rewritten this
+      // session would show only additions — which reads as the removals
+      // being lost.
+      const before =
+        options.baselines.lastAfterOf(affected) ?? options.baselines.baselineOf(affected);
+
+      // Recorded even when no event is emitted, so the next edit has an
+      // honest before to diff against.
+      options.baselines.recordAfter(affected, after);
+
+      if (before !== undefined) {
         const { diff, added, removed } = diffFiles(before, after, affected);
         // Nothing changed is not a change: an empty diff would draw a phantom
         // entry in the panel for a write that was a no-op.

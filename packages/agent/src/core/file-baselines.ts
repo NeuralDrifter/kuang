@@ -22,7 +22,10 @@ import { readFile } from "node:fs/promises";
 import { resolveInProject } from "./tools/fs.ts";
 
 export class FileBaselines {
+  /** Content at first touch — what a session-level revert restores to. */
   private readonly snapshots = new Map<string, string>();
+  /** Content after the previous successful write — what the next edit diffs against. */
+  private readonly lastAfter = new Map<string, string>();
 
   constructor(private readonly root: string) {}
 
@@ -65,5 +68,18 @@ export class FileBaselines {
     } catch {
       return undefined;
     }
+  }
+
+  /** The content after the previous successful write, or undefined. */
+  lastAfterOf(rel: string): string | undefined {
+    return this.lastAfter.get(rel);
+  }
+
+  /**
+   * Remember the content just written, so the next edit diffs against it
+   * rather than against the first-touch baseline.
+   */
+  recordAfter(rel: string, content: string): void {
+    this.lastAfter.set(rel, content);
   }
 }

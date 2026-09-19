@@ -74,3 +74,26 @@ test("a file deleted between capture and read is reported as unreadable", async 
   rmSync(join(root, "a.ts"));
   expect(await baselines.readNow("a.ts")).toBeUndefined();
 });
+
+test("lastAfterOf tracks the content after each recorded write", async () => {
+  const baselines = new FileBaselines(repo());
+
+  expect(baselines.lastAfterOf("a.ts")).toBeUndefined();
+  baselines.recordAfter("a.ts", "first\n");
+  expect(baselines.lastAfterOf("a.ts")).toBe("first\n");
+  baselines.recordAfter("a.ts", "second\n");
+  expect(baselines.lastAfterOf("a.ts")).toBe("second\n");
+});
+
+test("recording an after never moves the first-touch baseline", async () => {
+  const root = repo();
+  const file = join(root, "a.ts");
+  writeFileSync(file, "original\n", "utf-8");
+
+  const baselines = new FileBaselines(root);
+  await baselines.capture("a.ts");
+  baselines.recordAfter("a.ts", "changed\n");
+
+  expect(baselines.baselineOf("a.ts")).toBe("original\n");
+  expect(baselines.lastAfterOf("a.ts")).toBe("changed\n");
+});

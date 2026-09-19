@@ -427,7 +427,12 @@ test("a successful write emits file_changed with the baseline-to-current diff", 
   expect(change.type === "file_changed" && change.removed).toBe(0);
 });
 
-test("a second edit diffs against the original, not the previous edit", async () => {
+test("a second edit diffs against the previous edit, not the original", async () => {
+  // The panel answers "what did that edit do?", the way the approval box
+  // does. Diffing against the original here would re-report the first edit's
+  // change on top of the second's, and a file created then rewritten this
+  // session would show only additions — which is exactly the confusion that
+  // led here.
   const root = mkdtempSync(join(tmpdir(), "kuang-loop-"));
   writeFileSync(join(root, "a.ts"), "one\ntwo\n", "utf-8");
 
@@ -472,16 +477,21 @@ test("a second edit diffs against the original, not the previous edit", async ()
   const changed = events.filter((e) => e.type === "file_changed");
   expect(changed).toHaveLength(2);
 
-  // The second diff must describe the file as it differs from the ORIGINAL:
-  // "two"->"TWO" AND "one"->"ONE". Diffing against the previous edit would
-  // only see the second change; diffing against nothing would see nothing.
+  // The first edit's before is the baseline, so it shows the full first
+  // change; the second edit's before is the previous write, so it shows
+  // only what that edit did.
+  const first = changed[0]!;
+  expect(first.type === "file_changed" && first.added).toBe(1);
+  expect(first.type === "file_changed" && first.removed).toBe(1);
+  expect(first.type === "file_changed" && first.diff).toContain("-two");
+  expect(first.type === "file_changed" && first.diff).toContain("+TWO");
+
   const second = changed[1]!;
-  expect(second.type === "file_changed" && second.added).toBe(2);
-  expect(second.type === "file_changed" && second.removed).toBe(2);
-  expect(second.type === "file_changed" && second.diff).toContain("-two");
-  expect(second.type === "file_changed" && second.diff).toContain("+TWO");
+  expect(second.type === "file_changed" && second.added).toBe(1);
+  expect(second.type === "file_changed" && second.removed).toBe(1);
   expect(second.type === "file_changed" && second.diff).toContain("-one");
   expect(second.type === "file_changed" && second.diff).toContain("+ONE");
+  expect(second.type === "file_changed" && second.diff).not.toContain("-two");
 });
 
 test("a failed edit emits no file_changed", async () => {
@@ -555,4 +565,59 @@ test("a write that changes nothing emits no file_changed", async () => {
 
   expect(events.filter((e) => e.type === "tool_result" && e.ok)).toHaveLength(1);
   expect(events.filter((e) => e.type === "file_changed")).toHaveLength(0);
+});
+
+test("after a blind first touch, a second edit still diffs — against the previous write", async () => {
+  // capture records nothing, as a failed first-touch read does; but every
+  // successful write records its after, so the NEXT edit has an honest
+  // before even when the baseline never existed.
+  class BlindBaselines extends FileBaselines {
+    override async capture(): Promise<void> {
+      /* records nothing */
+    }
+  }
+
+  const root = mkdtempSync(join(tmpdir(), "kuang-loop-"));
+  const { sink, events } = collect();
+  const registry = new ToolRegistry();
+  for (const tool of fsTools(root)) registry.register(tool);
+
+  await runTurn([{ role: "user", content: "write twice" }], {
+    tools: registry,
+    approvals: new ApprovalStore([]),
+    ask: async () => "allow",
+    sink,
+    model: "qwen-max",
+    language: "en-US",
+    baselines: new BlindBaselines(root),
+    transport: scripted([
+      [
+        {
+          toolCall: {
+            index: 0,
+            id: "c1",
+            name: "write_file",
+            argumentsDelta: JSON.stringify({ path: "a.ts", content: "v1\n" }),
+          },
+        },
+      ],
+      [
+        {
+          toolCall: {
+            index: 0,
+            id: "c2",
+            name: "write_file",
+            argumentsDelta: JSON.stringify({ path: "a.ts", content: "v2\n" }),
+          },
+        },
+      ],
+      [{ text: "Done." }],
+    ]),
+  });
+
+  // First write: no honest before, no event. Second write: honest before.
+  const changed = events.filter((e) => e.type === "file_changed");
+  expect(changed).toHaveLength(1);
+  expect(changed[0]!.type === "file_changed" && changed[0]!.diff).toContain("-v1");
+  expect(changed[0]!.type === "file_changed" && changed[0]!.diff).toContain("+v2");
 });

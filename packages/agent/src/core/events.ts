@@ -30,7 +30,11 @@ export type AgentEvent =
   | { type: "tool_approval_required"; call: ToolCall; preview: ToolPreview }
   | { type: "tool_result"; callId: string; ok: boolean; summary: string }
   /**
-   * A file the agent changed, diffed from its content at first touch.
+   * A file the agent changed, diffed against its previous state.
+   *
+   * The previous state is the file's content at first touch for a first edit,
+   * and the previous successful write afterwards — so each entry answers
+   * "what did that edit do?", the way the approval box does.
    *
    * Emitted only after the tool reports success, so the panel never shows a
    * change that did not happen. Each emission for a path supersedes the last:
