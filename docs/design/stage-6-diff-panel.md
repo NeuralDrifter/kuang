@@ -114,7 +114,9 @@ Emitted by the loop, after a tool that declares `affects` **succeeds**:
 
 1. Before the call, if the path has no baseline, read and store it.
 2. Run the tool.
-3. On success, read the file again and diff **baseline → current**.
+3. On success, read the file again and diff **previous state → current**,
+   where the previous state is the last successful write for that path, or
+   the first-touch baseline for a first edit.
 4. Emit.
 
 A failed tool emits nothing, so the panel never shows a change that did not
@@ -236,6 +238,15 @@ jsdiff. Anything found and deferred goes in `KNOWN_ISSUES.md`.
   session runs will show that edit as the model's, because the baseline is from
   first touch and nothing re-reads it. Detecting it means comparing disk against
   last-known-after before every write. Deferred until it bites.
+
+## Deviations from the spec as written
+
+- **Per-edit deltas, not cumulative-from-first-touch.** The spec diffed every
+  edit against the first-touch baseline. In a real session that reads as
+  broken: a file the model creates and then rewrites shows only additions,
+  because the baseline predates the file. The panel answers "what did that
+  edit do?" — the previous write, or the baseline for a first edit — matching
+  how the approval box already behaved.
 
 ## Deviations from the spec as written
 
