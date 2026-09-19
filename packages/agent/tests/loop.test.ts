@@ -502,6 +502,51 @@ test("a failed edit emits no file_changed", async () => {
   expect(events.filter((e) => e.type === "file_changed")).toHaveLength(0);
 });
 
+test("a successful write with an unknown baseline emits no file_changed", async () => {
+  // When capture could not read the file at first touch — a transient lock,
+  // say — there is no honest before to diff against. A fabricated
+  // "the file was empty" diff would show every existing line as an
+  // addition, which is exactly the -0,0 lie the panel used to tell.
+  class BlindBaselines extends FileBaselines {
+    override async capture(): Promise<void> {
+      /* records nothing, as a failed read does */
+    }
+  }
+
+  const root = mkdtempSync(join(tmpdir(), "kuang-loop-"));
+  writeFileSync(join(root, "a.ts"), "existing\n", "utf-8");
+
+  const { sink, events } = collect();
+  const registry = new ToolRegistry();
+  for (const tool of fsTools(root)) registry.register(tool);
+
+  await runTurn([{ role: "user", content: "rewrite it" }], {
+    tools: registry,
+    approvals: new ApprovalStore([]),
+    ask: async () => "allow",
+    sink,
+    model: "qwen-max",
+    language: "en-US",
+    baselines: new BlindBaselines(root),
+    transport: scripted([
+      [
+        {
+          toolCall: {
+            index: 0,
+            id: "c1",
+            name: "write_file",
+            argumentsDelta: JSON.stringify({ path: "a.ts", content: "replaced\n" }),
+          },
+        },
+      ],
+      [{ text: "done" }],
+    ]),
+  });
+
+  expect(events.filter((e) => e.type === "tool_result" && e.ok)).toHaveLength(1);
+  expect(events.filter((e) => e.type === "file_changed")).toHaveLength(0);
+});
+
 test("a write that changes nothing emits no file_changed", async () => {
   const root = mkdtempSync(join(tmpdir(), "kuang-loop-"));
   writeFileSync(join(root, "a.ts"), "same\n", "utf-8");

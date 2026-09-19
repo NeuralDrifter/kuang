@@ -375,17 +375,20 @@ async function resolveCall(call: ToolCall, options: LoopOptions): Promise<AgentM
   const { message, ok } = await runTool(tool, call, parsed.args, options.sink);
 
   if (ok && affected) {
-    const after = await options.baselines.readNow(affected);
-    if (after !== undefined) {
-      const { diff, added, removed } = diffFiles(
-        options.baselines.baselineOf(affected) ?? "",
-        after,
-        affected,
-      );
-      // Nothing changed is not a change: an empty diff would draw a phantom
-      // entry in the panel for a write that was a no-op.
-      if (added > 0 || removed > 0) {
-        options.sink({ type: "file_changed", path: affected, diff, added, removed });
+    const before = options.baselines.baselineOf(affected);
+    // `before` undefined means the first-touch read failed — a transient
+    // lock, say — not that the file was empty. Emitting a diff against ""
+    // would then show every existing line as an addition, which is a
+    // fabricated "-0,0" lie. Honest absence beats a wrong diff.
+    if (before !== undefined) {
+      const after = await options.baselines.readNow(affected);
+      if (after !== undefined) {
+        const { diff, added, removed } = diffFiles(before, after, affected);
+        // Nothing changed is not a change: an empty diff would draw a phantom
+        // entry in the panel for a write that was a no-op.
+        if (added > 0 || removed > 0) {
+          options.sink({ type: "file_changed", path: affected, diff, added, removed });
+        }
       }
     }
   }

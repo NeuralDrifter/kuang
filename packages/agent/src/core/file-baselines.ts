@@ -45,7 +45,15 @@ export class FileBaselines {
     this.snapshots.set(rel, content);
   }
 
-  /** The content at first touch, or undefined when never touched. */
+  /**
+   * The content at first touch.
+   *
+   * `undefined` means "no honest baseline exists" — either never touched, or
+   * the first read failed — and callers must skip rather than substitute.
+   * `""` means the file did not exist at first touch and was created since;
+   * the two are not the same thing, and conflating them fabricates a diff
+   * that shows an existing file as born empty.
+   */
   baselineOf(rel: string): string | undefined {
     return this.snapshots.get(rel);
   }
